@@ -5,7 +5,7 @@
 >
 > 📄 **Paper:** _coming soon_ &nbsp;&middot;&nbsp;
 > 🏆 **Leaderboard:** [`RomeroLab-Duke/BioDesignBench-Leaderboard`](https://huggingface.co/spaces/RomeroLab-Duke/BioDesignBench-Leaderboard) &nbsp;&middot;&nbsp;
-> 🧬 **Reference MCP server:** [`RomeroLab/protein-design-mcp`](https://github.com/RomeroLab/protein-design-mcp) _(in progress)_
+> 🧬 **Reference MCP server:** [`jasonkim8652/protein-design-mcp`](https://github.com/jasonkim8652/protein-design-mcp) &middot; `pip install protein-design-mcp`
 
 BioDesignBench is a benchmark for testing whether tool-augmented LLM agents can
 orchestrate the **stochastic, multi-step pipelines of computational protein
@@ -119,10 +119,12 @@ pip install -e ".[dev,agents]"
 ```
 
 For the GPU-side protein-design tools (RFdiffusion, ProteinMPNN, Boltz-2,
-PyRosetta, AF2), install the reference MCP server separately:
+PyRosetta, AF2), install the reference MCP server:
 
 ```bash
-# In progress — see https://github.com/RomeroLab/protein-design-mcp
+pip install protein-design-mcp
+# Source, Dockerfiles, and Modal deploy template:
+#   https://github.com/jasonkim8652/protein-design-mcp
 ```
 
 ### 2. Configure API keys
@@ -193,8 +195,9 @@ the submission form's **Advanced: Custom MCP** section:
 - **Minimal FastAPI stub (~150 lines)**:
   [`biodesignbench-leaderboard/example_mcp_server.py`](biodesignbench-leaderboard/example_mcp_server.py)
 - **Reference implementation to fork**:
-  [`RomeroLab/protein-design-mcp`](https://github.com/RomeroLab/protein-design-mcp)
-  *(in progress)*
+  [`jasonkim8652/protein-design-mcp`](https://github.com/jasonkim8652/protein-design-mcp)
+  (PyPI: `protein-design-mcp`; Modal deploy template included in
+  `deploy/modal_app.py`)
 
 The MCP server — ours or yours — only ever sees operational tool
 arguments (sequences, PDB paths, hotspot residues). It never sees the

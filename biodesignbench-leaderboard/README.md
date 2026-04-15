@@ -76,10 +76,11 @@ the leaderboard's agent loop picks tools by name from this list.
 
 ### Reference implementation
 
-See [`RomeroLab/protein-design-mcp`](https://github.com/RomeroLab/protein-design-mcp)
-for the lab's reference implementation. It is published as a Docker
-image and a Modal app; you can fork it, replace individual tool
-handlers, and redeploy.
+See [`jasonkim8652/protein-design-mcp`](https://github.com/jasonkim8652/protein-design-mcp)
+for the lab's reference implementation (also on PyPI:
+`pip install protein-design-mcp`). The repo includes a Dockerfile and
+a Modal deploy template (`deploy/modal_app.py`) you can fork, swap in
+your own tool handlers, and redeploy.
 
 ### Hosting options
 
