@@ -374,11 +374,16 @@ def build_leaderboard_table(
             mcp = f'<td style="{TD};color:#718096">\u2014</td>'
         elif e.get("mcp_custom"):
             mcp = (
-                f'<td style="{TD};color:#38a169;font-weight:700">'
-                "\u2713 custom</td>"
+                f'<td style="{TD}"><span style="background:#fef3c7;'
+                "color:#92400e;padding:0.15rem 0.55rem;border-radius:4px;"
+                'font-size:0.72rem;font-weight:700">custom</span></td>'
             )
         else:
-            mcp = f'<td style="{TD};color:#718096">reference</td>'
+            mcp = (
+                f'<td style="{TD}"><span style="background:#dbeafe;'
+                "color:#1e40af;padding:0.15rem 0.55rem;border-radius:4px;"
+                'font-size:0.72rem;font-weight:700">reference</span></td>'
+            )
 
         # ── Score with proportional bar ──
         scol = _score_color(sc)
@@ -813,13 +818,26 @@ def build_about() -> str:
         <h2 {h2}>How to submit</h2>
         <h3 {h3}>1. Build your agent</h3>
         <p {p}>
-          Create a protein design agent that accepts tasks via our API.
-          You can use our 17 reference MCP tools as-is, extend them, or
-          build entirely custom tools.</p>
+          Create a protein design agent that runs the full plan &rarr;
+          sample &rarr; evaluate &rarr; iterate loop on each task. Pick one
+          of two MCP options:</p>
+        <ul style="color:#475569;padding-left:1.5rem;margin-bottom:0.8rem;
+                   line-height:1.7">
+          <li><strong>Reference MCP</strong> &mdash; connect to our published
+            <a href="https://github.com/RomeroLab/protein-design-mcp"
+               style="color:#2563eb;font-weight:600">protein-design-mcp</a>
+            server (Docker image / Modal endpoint, in progress). Eligible for
+            the reference ranking.</li>
+          <li><strong>Custom MCP</strong> &mdash; bring your own tool
+            implementations. Tagged with a <code>custom</code> badge on the
+            leaderboard, excluded from the reference ranking.</li>
+        </ul>
         <h3 {h3}>2. Host an API endpoint</h3>
         <p {p}>
           Your agent must be accessible as a POST endpoint that accepts
-          task payloads and returns designed protein sequences.</p>
+          task payloads and returns designed sequences plus a tool-call
+          trace. See <code>biodesignbench-leaderboard/example_server.py</code>
+          for a 200-line reference.</p>
         <h3 {h3}>API specification</h3>
         <pre style="background:#0f172a;color:#e2e8f0;padding:1.2rem;
                     border-radius:10px;font-size:0.8rem;overflow-x:auto;
@@ -830,6 +848,8 @@ Request:
   "task_id": "dnb_ab_001",
   "task_description": "Design a de novo binder for...",
   "available_tools": [...],
+  "input_files": {{ "<pdb-name>": "<base64>" }},
+  "design_constraints": {{ ... }},
   "max_steps": 50,
   "timeout_sec": 300
 }}
@@ -837,30 +857,27 @@ Request:
 Response:
 {{
   "sequences": ["MKKL..."],
-  "run_log": [...],
+  "run_log": [{{ "step": 1, "tool": "...", "success": true }}],
   "total_steps": 12,
-  "total_time_sec": 142.5
+  "total_time_sec": 142.5,
+  "metrics": {{}}
 }}</pre>
         <h3 {h3}>3. Submit and wait</h3>
         <p {p}>
-          We dispatch 73 hidden tasks to your endpoint and verify results
-          with Boltz structure prediction.
-          Maximum <strong>2 submissions per month</strong> per organization.</p>
+          We dispatch 73 hidden tasks to your endpoint, run Boltz-2
+          structure verification on each design, and score against the
+          100-point hybrid rubric (algorithmic + 3-judge LLM panel).
+          Maximum <strong>1 submission per month</strong> per
+          organization &mdash; LLM-judge API costs are paid by Romero
+          Lab.</p>
         <p {p}>
           3 example tasks are publicly available for development and
-          testing.</p>
-
-        <h3 {h3}>Reference MCP tools</h3>
-        <p {p}>
-          We provide 17 reference MCP tools for protein design. You can use
-          them as-is, extend them, or build entirely custom tools.
-          <a href="#" style="color:#2563eb;font-weight:500">
-          GitHub repository &rarr;</a></p>
+          testing your endpoint before submission.</p>
 
         <h3 {h3}>Limits</h3>
         <ul style="color:#475569;padding-left:1.5rem;margin-bottom:0.8rem;
                    line-height:1.7">
-          <li>Maximum 2 submissions per calendar month per organization</li>
+          <li>Maximum 1 submission per calendar month per organization</li>
           <li>73 hidden tasks are used for ranking</li>
           <li>3 public example tasks are available for development</li>
         </ul>
@@ -1273,27 +1290,64 @@ def create_app() -> gr.Blocks:
             # ══════ Tab 5: Submit ══════
             with gr.Tab("\U0001f4e4 Submit"):
                 gr.HTML("""
-                <div style="max-width:700px;margin:0 auto;padding:1rem">
+                <div style="max-width:780px;margin:0 auto;padding:1rem">
                   <h2 style="color:#0f172a;margin:0 0 0.5rem;
                              font-weight:700;font-size:1.25rem">
                     Submit your agent</h2>
                   <p style="color:#475569;margin-bottom:1rem;line-height:1.6">
-                    Submit your protein design agent for benchmarking.
-                    Your agent must be hosted as a POST endpoint that accepts
-                    task payloads and returns designed sequences.
-                    <strong>You bear all LLM and tool costs</strong> &mdash;
-                    we only run Boltz structure prediction on our side.</p>
+                    Host your protein-design agent as an HTTPS endpoint that
+                    accepts task payloads and returns designed sequences plus
+                    a tool-call trace. The leaderboard will POST each of the
+                    76 hidden tasks to your endpoint, run Boltz-2 structure
+                    verification, score the rubric, and publish the result.
+                  </p>
+
+                  <div style="background:#eff6ff;border-left:4px solid #3182ce;
+                              padding:0.95rem 1.1rem;border-radius:8px;
+                              margin-bottom:1rem;font-size:0.86rem;
+                              color:#1e3a8a;line-height:1.55">
+                    <strong>Two MCP options &mdash; pick one below:</strong>
+                    <ul style="margin:0.5rem 0 0 1.1rem;padding:0">
+                      <li><strong>Reference MCP</strong> (recommended):
+                        connect your agent to our published
+                        <a href="https://github.com/RomeroLab/protein-design-mcp"
+                           style="color:#1d4ed8;font-weight:600">protein-design-mcp</a>
+                        Docker image / Modal endpoint so every submission uses
+                        the identical 17-tool reference implementation.
+                        Eligible for the <em>reference</em> ranking.
+                      </li>
+                      <li><strong>Custom MCP</strong>: bring your own tool
+                        implementations. Tagged with a <code>custom</code>
+                        badge and excluded from the reference ranking. Useful
+                        for measuring tool-implementation contributions.
+                      </li>
+                    </ul>
+                  </div>
+
                   <div style="background:#fefce8;border-left:3px solid #ca8a04;
                               padding:0.8rem 1rem;border-radius:6px;
                               margin-bottom:1rem;font-size:0.85rem;color:#713f12">
-                    <strong>Rate limit:</strong> 2 submissions per calendar
-                    month per organization.</div>
+                    <strong>Rate limit:</strong> 1 submission per calendar
+                    month per organization. LLM-judge API costs (~$10/run)
+                    are paid by Romero Lab, so please be considerate.
+                    You bear your own agent / tool compute costs.
+                  </div>
+
+                  <p style="color:#475569;font-size:0.85rem;line-height:1.55;
+                            margin:0">
+                    See
+                    <code>biodesignbench-leaderboard/example_server.py</code>
+                    in the
+                    <a href="https://github.com/RomeroLab/BioDesignBench"
+                       style="color:#2563eb;font-weight:500">GitHub repo</a>
+                    for a 200-line reference implementation of the endpoint.
+                  </p>
                 </div>""")
 
                 with gr.Column(scale=1):
                     sub_agent = gr.Textbox(
                         label="Agent Name",
-                        placeholder="e.g., GPT-5 + Custom MCP Tools",
+                        placeholder="e.g., GPT-5 + protein-design-mcp",
                     )
                     sub_org = gr.Textbox(
                         label="Organization",
@@ -1308,9 +1362,18 @@ def create_app() -> gr.Blocks:
                         placeholder="Brief description of your agent...",
                         lines=3,
                     )
-                    sub_mcp = gr.Checkbox(
-                        label="Uses custom MCP tools (not reference)",
-                        value=False,
+                    sub_mcp_mode = gr.Radio(
+                        choices=[
+                            ("Reference MCP (eligible for ranking)", "reference"),
+                            ("Custom MCP (own tool implementations)", "custom"),
+                        ],
+                        value="reference",
+                        label="MCP tool implementation",
+                        info=(
+                            "Reference = your agent calls our published "
+                            "protein-design-mcp server. Custom = your agent "
+                            "uses its own tool implementations."
+                        ),
                     )
                     sub_btn = gr.Button(
                         "Submit for Review",
@@ -1318,7 +1381,7 @@ def create_app() -> gr.Blocks:
                     )
                     sub_result = gr.HTML()
 
-                def _handle_submit(name, org, url, desc, mcp):
+                def _handle_submit(name, org, url, desc, mcp_mode):
                     if not name or not org or not url:
                         return ('<div style="color:#e53e3e;padding:0.5rem">'
                                 "Please fill in all required fields.</div>")
@@ -1332,7 +1395,7 @@ def create_app() -> gr.Blocks:
                             organization=org,
                             endpoint_url=url,
                             description=desc,
-                            mcp_custom=mcp,
+                            mcp_custom=(mcp_mode == "custom"),
                         )
                         if "error" in result:
                             return (f'<div style="color:#e53e3e;padding:0.5rem">'
@@ -1343,6 +1406,7 @@ def create_app() -> gr.Blocks:
                             f'<strong>Submitted!</strong> '
                             f'ID: <code>{result["submission_id"]}</code><br>'
                             f'Status: {result["status"]}<br>'
+                            f'MCP mode: <strong>{mcp_mode}</strong><br>'
                             f'{result.get("message", "")}</div>'
                         )
                     except Exception as e:
@@ -1351,7 +1415,7 @@ def create_app() -> gr.Blocks:
 
                 sub_btn.click(
                     _handle_submit,
-                    [sub_agent, sub_org, sub_url, sub_desc, sub_mcp],
+                    [sub_agent, sub_org, sub_url, sub_desc, sub_mcp_mode],
                     sub_result,
                 )
 

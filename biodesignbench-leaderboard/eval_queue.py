@@ -3,7 +3,8 @@
 Manages the lifecycle of benchmark submissions:
   pending → approved → dispatching → boltz → scoring → complete / failed
 
-Rate limiting: 2 submissions per calendar month per organization.
+Rate limiting: 1 submission per calendar month per organization.
+LLM-judge API costs are paid by Romero Lab, so the limit is intentionally low.
 
 HF Dataset: RomeroLab-Duke/biodesignbench-submissions (private)
 Schema: Each row is a submission with per-task results stored as JSON.
@@ -29,7 +30,7 @@ SUBMISSIONS_DATASET = os.environ.get(
     "RomeroLab-Duke/biodesignbench-submissions",
 )
 HF_TOKEN = os.environ.get("HF_TOKEN")
-MAX_SUBMISSIONS_PER_MONTH = 2
+MAX_SUBMISSIONS_PER_MONTH = 1
 
 # Submission status progression
 VALID_STATUSES = {
