@@ -38,3 +38,34 @@ Novelty, and Diversity. See the *About* tab for the full methodology and the
 - **Guidance Effect** — Paired comparison of the same LLM in unguided (atomic tools) vs guided (composite workflows) mode
 - **Depth Gap** — Forced-depth and low-diversity intervention results
 - **About** — Methodology, submission guide, and citation info
+
+## Backend pipeline phases
+
+Submission processing runs in 4 admin-controlled phases:
+
+| Phase | Step | Status | Notes |
+|---|---|---|---|
+| **A** | Dispatch tasks → CPU scoring | live | HTTP POST to submitter endpoint, validate, score 5/6 components |
+| **B** | Boltz-2 structure verification | code-ready | Needs ZeroGPU hardware + uncommented `torch`/`boltz` deps |
+| **C** | LLM judge panel (28-pt hybrid) | live | 3-judge PoLL with self-exclusion, requires API key secrets |
+| **D** | Finalize + publish to leaderboard | live | Aggregates hybrid scores, writes back to submissions dataset |
+
+### Phase B activation checklist
+
+To wire up Boltz-2 verification on this Space:
+
+1. **Switch hardware** in HF Space settings → Hardware → `zero-a10g`
+   (requires HF Pro / Enterprise).
+2. **Edit `requirements.txt`** and uncomment the two lines:
+   ```
+   torch>=2.2
+   boltz>=0.4
+   ```
+3. **Verify secrets** are set: `HF_TOKEN` (private dataset),
+   `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY`,
+   `DEEPSEEK_API_KEY`.
+4. Restart the Space. The first build will pull ~2GB of CUDA wheels.
+
+On `cpu-basic` hardware the Phase B predictors return a structured
+failure dict with `success=False` and an actionable error message
+instead of crashing the dispatcher.

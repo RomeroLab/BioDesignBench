@@ -9,3 +9,13 @@ datasets>=2.16
 anthropic>=0.75
 openai>=1.40
 google-genai>=0.3
+
+# Phase B (Boltz post-eval). The `spaces` shim is safe on any hardware
+# tier; the `@spaces.GPU(...)` decorator is a no-op on cpu-basic and
+# provisions ZeroGPU on zero-a10g. Boltz-1 + torch require an actual
+# CUDA build, so they are gated: uncomment ONLY after switching the
+# Space hardware to a GPU tier (zero-a10g recommended) — otherwise pip
+# will pull ~2GB of CUDA wheels onto a CPU image and the build fails.
+spaces>=0.30
+# torch>=2.2          # ZeroGPU only — uncomment after hardware flip
+# boltz>=0.4          # ZeroGPU only — uncomment after hardware flip

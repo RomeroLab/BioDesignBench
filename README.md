@@ -182,6 +182,18 @@ for a 200-line reference implementation.
 **Rate limit:** 1 submission per calendar month per organization.
 LLM-judge API costs are paid by Romero Lab; please be considerate.
 
+### Backend pipeline status
+
+| Phase | Step | Status |
+|---|---|---|
+| A | Dispatch tasks → CPU scoring (5/6 components) | live |
+| B | Boltz-2 structure verification | code-ready, needs ZeroGPU hardware flip |
+| C | LLM-judge panel (28-pt hybrid) | live |
+| D | Finalize + publish | live |
+
+See [`biodesignbench-leaderboard/README.md`](biodesignbench-leaderboard/README.md)
+for the Phase B activation checklist.
+
 ## Citation
 
 ```bibtex

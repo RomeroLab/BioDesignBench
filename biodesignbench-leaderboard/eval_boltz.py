@@ -7,6 +7,14 @@ Two prediction modes:
   - Complex: Binding tasks (binder + target) -> ipTM, i_pAE
 
 Batch chunking respects ZeroGPU time limits (~180-240s per burst).
+
+Phase B activation checklist (must all be true to actually run Boltz):
+  1. HF Space hardware switched to a GPU tier (zero-a10g recommended).
+  2. requirements.txt has `torch` and `boltz` uncommented.
+  3. HF_TOKEN secret set on the Space (for the private hidden-tasks dataset).
+On a cpu-basic Space the predictors return a structured failure dict
+with `success=False` and an actionable error message rather than
+crashing the dispatcher.
 """
 
 from __future__ import annotations
@@ -28,16 +36,29 @@ MAX_GPU_TIME = 240         # safety margin under 300s ZeroGPU limit
 # ---------------------------------------------------------------------------
 
 
+_BOLTZ_NOT_INSTALLED = (
+    "Boltz / torch not available on this Space. To enable Phase B, "
+    "switch the Space hardware to ZeroGPU (zero-a10g) and uncomment the "
+    "torch + boltz lines in requirements.txt."
+)
+
+
 def _predict_monomer(sequence: str) -> dict[str, float]:
     """Predict structure of a single protein sequence using Boltz.
 
     Returns:
-        Dict with: pLDDT, pTM (or error).
+        Dict with: pLDDT, pTM (or a structured failure dict).
     """
     try:
-        import torch
+        import torch  # noqa: F401
         from boltz import Boltz
-
+    except ImportError:
+        logger.warning(_BOLTZ_NOT_INSTALLED)
+        return {
+            "pLDDT": 0.0, "pTM": 0.0,
+            "success": False, "error": _BOLTZ_NOT_INSTALLED,
+        }
+    try:
         model = Boltz.from_pretrained("boltz2")
         result = model.predict(sequence)
 
@@ -61,12 +82,18 @@ def _predict_complex(
     """Predict complex structure and binding metrics using Boltz.
 
     Returns:
-        Dict with: ipTM, i_pAE, pLDDT, pTM (or error).
+        Dict with: ipTM, i_pAE, pLDDT, pTM (or a structured failure dict).
     """
     try:
-        import torch
+        import torch  # noqa: F401
         from boltz import Boltz
-
+    except ImportError:
+        logger.warning(_BOLTZ_NOT_INSTALLED)
+        return {
+            "pLDDT": 0.0, "pTM": 0.0, "ipTM": 0.0, "i_pAE": 0.0,
+            "success": False, "error": _BOLTZ_NOT_INSTALLED,
+        }
+    try:
         model = Boltz.from_pretrained("boltz2")
         result = model.predict([binder_seq, target_seq])
 
