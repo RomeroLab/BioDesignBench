@@ -187,12 +187,12 @@ LLM-judge API costs are paid by Romero Lab; please be considerate.
 | Phase | Step | Status |
 |---|---|---|
 | A | Dispatch tasks → CPU scoring (5/6 components) | live |
-| B | Boltz-2 structure verification | code-ready, needs ZeroGPU hardware flip |
+| B | Boltz-2 structure verification | live (Modal-hosted A10G sidecar) |
 | C | LLM-judge panel (28-pt hybrid) | live |
 | D | Finalize + publish | live |
 
 See [`biodesignbench-leaderboard/README.md`](biodesignbench-leaderboard/README.md)
-for the Phase B activation checklist.
+for the Modal companion-app deployment notes.
 
 ## Citation
 

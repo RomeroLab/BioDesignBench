@@ -46,26 +46,40 @@ Submission processing runs in 4 admin-controlled phases:
 | Phase | Step | Status | Notes |
 |---|---|---|---|
 | **A** | Dispatch tasks → CPU scoring | live | HTTP POST to submitter endpoint, validate, score 5/6 components |
-| **B** | Boltz-2 structure verification | code-ready | Needs ZeroGPU hardware + uncommented `torch`/`boltz` deps |
+| **B** | Boltz-2 structure verification | live (Modal) | Modal-hosted A10G companion app provisions GPU on demand |
 | **C** | LLM judge panel (28-pt hybrid) | live | 3-judge PoLL with self-exclusion, requires API key secrets |
 | **D** | Finalize + publish to leaderboard | live | Aggregates hybrid scores, writes back to submissions dataset |
 
-### Phase B activation checklist
+### Phase B architecture (Modal companion app)
 
-To wire up Boltz-2 verification on this Space:
+The HF Space runs on `cpu-basic` and cannot host Boltz directly, so
+Phase B uses a Modal-deployed sidecar (`modal_boltz_app.py`) that:
 
-1. **Switch hardware** in HF Space settings → Hardware → `zero-a10g`
-   (requires HF Pro / Enterprise).
-2. **Edit `requirements.txt`** and uncomment the two lines:
-   ```
-   torch>=2.2
-   boltz>=0.4
-   ```
-3. **Verify secrets** are set: `HF_TOKEN` (private dataset),
-   `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY`,
-   `DEEPSEEK_API_KEY`.
-4. Restart the Space. The first build will pull ~2GB of CUDA wheels.
+- pre-builds an image with `boltz==2.2.1`, `torch==2.10`, NVIDIA
+  cuequivariance kernels, and FastAPI;
+- exposes a single web endpoint at
+  `https://<workspace>--bdb-boltz-predict.modal.run`;
+- spins up an A10G on demand, runs `boltz predict` (via the same CLI
+  the dev pipeline uses), and returns confidence metrics;
+- auto-stops after 5 minutes idle so the lab is only billed for active
+  inference time (~$0.06 per task at A10G rates).
 
-On `cpu-basic` hardware the Phase B predictors return a structured
+The HF Space is just an HTTP client (`eval_boltz.py`); design sequences
+are POSTed to the Modal endpoint with a shared bearer token. To
+deploy the sidecar (one time):
+
+```bash
+cd biodesignbench-leaderboard
+modal deploy modal_boltz_app.py
+```
+
+Then set these HF Space secrets:
+
+```
+MODAL_BOLTZ_URL    https://<workspace>--bdb-boltz-predict.modal.run
+MODAL_BOLTZ_TOKEN  matches the modal secret `bdb-boltz-shared` TOKEN
+```
+
+If `MODAL_BOLTZ_URL` is unset, Phase B predictors return a structured
 failure dict with `success=False` and an actionable error message
 instead of crashing the dispatcher.
