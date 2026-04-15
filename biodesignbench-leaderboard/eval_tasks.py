@@ -199,13 +199,23 @@ def load_tool_schemas() -> list[dict[str, Any]]:
     return []
 
 
-def build_task_payload(task_id: str) -> dict[str, Any] | None:
-    """Build the payload to send to a submitter's endpoint.
+def build_task_payload(
+    task_id: str,
+    canary_token: str = "",
+) -> dict[str, Any] | None:
+    """Build the in-process task payload consumed by eval_dispatcher.
+
+    Args:
+        task_id: Hidden task identifier.
+        canary_token: Per-submission watermark embedded in the task
+            prompt as a hidden HTML comment. Allows retrospective
+            contamination audits: if a future model regurgitates the
+            token verbatim we know which submission leaked it.
 
     Returns:
         Dict with: task_id, task_description, available_tools,
         input_files, design_constraints, max_steps, timeout_sec.
-        Returns None if task not found.
+        Returns None if the task is not found.
     """
     task = get_task(task_id)
     if task is None:
@@ -214,12 +224,16 @@ def build_task_payload(task_id: str) -> dict[str, Any] | None:
     task_json = task["task_json"]
     prompt = task["prompt_md"]
 
-    # Build input files (base64-encoded PDBs)
-    input_files = {}
+    # Embed the canary as an inline HTML comment. It is invisible to
+    # human readers but trivially detectable in any downstream training
+    # corpus that ingested the task verbatim.
+    if canary_token:
+        prompt = f"{prompt}\n\n<!-- bdb-canary:{canary_token} -->"
+
+    input_files: dict[str, str] = {}
     if task.get("pdb_data") and task.get("pdb_filename"):
         input_files[task["pdb_filename"]] = task["pdb_data"]
 
-    # Extract constraints from task JSON
     constraints = task_json.get("design_constraints", {})
     max_designs = task_json.get("max_designs", 10)
 
@@ -234,4 +248,5 @@ def build_task_payload(task_id: str) -> dict[str, Any] | None:
         },
         "max_steps": 50,
         "timeout_sec": 300,
+        "canary_token": canary_token,
     }

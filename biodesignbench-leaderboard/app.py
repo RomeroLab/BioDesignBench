@@ -1287,40 +1287,60 @@ def create_app() -> gr.Blocks:
                     data.get("interventions", {})
                 ))
 
-            # ══════ Tab 5: Submit ══════
+            # ══════ Tab: Submit ══════
             with gr.Tab("\U0001f4e4 Submit"):
                 gr.HTML("""
-                <div style="max-width:780px;margin:0 auto;padding:1rem">
+                <div style="max-width:820px;margin:0 auto;padding:1rem">
                   <h2 style="color:#0f172a;margin:0 0 0.5rem;
                              font-weight:700;font-size:1.25rem">
                     Submit your agent</h2>
                   <p style="color:#475569;margin-bottom:1rem;line-height:1.6">
-                    Host your protein-design agent as an HTTPS endpoint that
-                    accepts task payloads and returns designed sequences plus
-                    a tool-call trace. The leaderboard will POST each of the
-                    76 hidden tasks to your endpoint, run Boltz-2 structure
-                    verification, score the rubric, and publish the result.
+                    BioDesignBench evaluates models inside Romero Lab
+                    infrastructure to keep the 76 task specifications
+                    contamination-clean. You provide an LLM API key and
+                    a model name, and we run the BioDesignBench agent
+                    loop against your model with the reference 17-tool
+                    MCP server. Task content never leaves Romero Lab
+                    except through your chosen LLM provider's API call.
                   </p>
+
+                  <div style="background:#dcfce7;border-left:4px solid #15803d;
+                              padding:0.95rem 1.1rem;border-radius:8px;
+                              margin-bottom:1rem;font-size:0.86rem;
+                              color:#14532d;line-height:1.55">
+                    <strong>How your credentials are handled:</strong>
+                    <ul style="margin:0.5rem 0 0 1.1rem;padding:0">
+                      <li>Your API key is stored on the submission row
+                        only between submission and dispatch, then
+                        <strong>scrubbed automatically</strong> regardless
+                        of whether the run succeeded.</li>
+                      <li>Each task carries a unique 16-character canary
+                        token (invisible HTML comment) so we can
+                        retrospectively detect leakage in published
+                        models.</li>
+                      <li>The MCP server (reference or custom) sees
+                        only operational tool arguments, never the raw
+                        task description or evaluation criteria.</li>
+                    </ul>
+                  </div>
 
                   <div style="background:#eff6ff;border-left:4px solid #3182ce;
                               padding:0.95rem 1.1rem;border-radius:8px;
                               margin-bottom:1rem;font-size:0.86rem;
                               color:#1e3a8a;line-height:1.55">
-                    <strong>Two MCP options &mdash; pick one below:</strong>
+                    <strong>Reference vs Custom MCP</strong>
                     <ul style="margin:0.5rem 0 0 1.1rem;padding:0">
-                      <li><strong>Reference MCP</strong> (recommended):
-                        connect your agent to our published
+                      <li><strong>Reference</strong> (default): your
+                        agent uses our hosted
                         <a href="https://github.com/RomeroLab/protein-design-mcp"
                            style="color:#1d4ed8;font-weight:600">protein-design-mcp</a>
-                        Docker image / Modal endpoint so every submission uses
-                        the identical 17-tool reference implementation.
-                        Eligible for the <em>reference</em> ranking.
-                      </li>
-                      <li><strong>Custom MCP</strong>: bring your own tool
-                        implementations. Tagged with a <code>custom</code>
-                        badge and excluded from the reference ranking. Useful
-                        for measuring tool-implementation contributions.
-                      </li>
+                        endpoint. Eligible for the reference ranking.</li>
+                      <li><strong>Custom</strong>: provide your own
+                        public MCP URL implementing the same 17-tool
+                        schema. Useful for benchmarking new tool
+                        implementations against an identical model
+                        under identical task prompts. Tagged with a
+                        <code>custom</code> badge.</li>
                     </ul>
                   </div>
 
@@ -1328,85 +1348,96 @@ def create_app() -> gr.Blocks:
                               padding:0.8rem 1rem;border-radius:6px;
                               margin-bottom:1rem;font-size:0.85rem;color:#713f12">
                     <strong>Rate limit:</strong> 1 submission per calendar
-                    month per organization. LLM-judge API costs (~$10/run)
-                    are paid by Romero Lab, so please be considerate.
-                    You bear your own agent / tool compute costs.
+                    month per organization. Your LLM-API and (if reference)
+                    MCP-GPU costs are billed to your account / paid by
+                    Romero Lab respectively; please be considerate.
                   </div>
-
-                  <p style="color:#475569;font-size:0.85rem;line-height:1.55;
-                            margin:0">
-                    See
-                    <code>biodesignbench-leaderboard/example_server.py</code>
-                    in the
-                    <a href="https://github.com/RomeroLab/BioDesignBench"
-                       style="color:#2563eb;font-weight:500">GitHub repo</a>
-                    for a 200-line reference implementation of the endpoint.
-                  </p>
                 </div>""")
 
                 with gr.Column(scale=1):
                     sub_agent = gr.Textbox(
                         label="Agent Name",
-                        placeholder="e.g., GPT-5 + protein-design-mcp",
+                        placeholder="e.g., GPT-5 with reference MCP",
                     )
                     sub_org = gr.Textbox(
                         label="Organization",
                         placeholder="e.g., OpenAI",
                     )
-                    sub_url = gr.Textbox(
-                        label="Endpoint URL",
-                        placeholder="https://your-server.com/api/run",
+                    with gr.Row():
+                        sub_provider = gr.Dropdown(
+                            choices=[
+                                ("Anthropic Claude", "anthropic"),
+                                ("OpenAI GPT", "openai"),
+                                ("Google Gemini", "google"),
+                                ("DeepSeek", "deepseek"),
+                            ],
+                            value="anthropic",
+                            label="LLM Provider",
+                        )
+                        sub_model = gr.Textbox(
+                            label="Model name",
+                            placeholder="e.g., claude-sonnet-4-20250514",
+                        )
+                    sub_api_key = gr.Textbox(
+                        label="API key (transient -- scrubbed after dispatch)",
+                        placeholder="sk-...",
+                        type="password",
                     )
                     sub_desc = gr.Textbox(
                         label="Description (optional)",
                         placeholder="Brief description of your agent...",
-                        lines=3,
+                        lines=2,
                     )
-                    sub_mcp_mode = gr.Radio(
-                        choices=[
-                            ("Reference MCP (eligible for ranking)", "reference"),
-                            ("Custom MCP (own tool implementations)", "custom"),
-                        ],
-                        value="reference",
-                        label="MCP tool implementation",
-                        info=(
-                            "Reference = your agent calls our published "
-                            "protein-design-mcp server. Custom = your agent "
-                            "uses its own tool implementations."
-                        ),
-                    )
+                    with gr.Accordion("Advanced: Custom MCP", open=False):
+                        sub_custom_mcp_url = gr.Textbox(
+                            label="Custom MCP URL (optional)",
+                            placeholder="https://your-mcp.example.com/predict",
+                        )
+                        sub_custom_mcp_token = gr.Textbox(
+                            label="Custom MCP bearer token (optional)",
+                            placeholder="(empty if your MCP needs no auth)",
+                            type="password",
+                        )
                     sub_btn = gr.Button(
                         "Submit for Review",
                         variant="primary",
                     )
                     sub_result = gr.HTML()
 
-                def _handle_submit(name, org, url, desc, mcp_mode):
-                    if not name or not org or not url:
+                def _handle_submit(
+                    name, org, provider, model, api_key, desc,
+                    custom_mcp_url, custom_mcp_token,
+                ):
+                    if not name or not org or not model or not api_key:
                         return ('<div style="color:#e53e3e;padding:0.5rem">'
-                                "Please fill in all required fields.</div>")
-                    if not url.startswith(("http://", "https://")):
-                        return ('<div style="color:#e53e3e;padding:0.5rem">'
-                                "URL must start with http:// or https://</div>")
+                                "agent name, organization, model name, and "
+                                "API key are required.</div>")
                     try:
                         from eval_queue import submit
                         result = submit(
                             agent_name=name,
                             organization=org,
-                            endpoint_url=url,
+                            provider=provider,
+                            model_name=model,
+                            api_key=api_key,
                             description=desc,
-                            mcp_custom=(mcp_mode == "custom"),
+                            custom_mcp_url=custom_mcp_url or "",
+                            custom_mcp_token=custom_mcp_token or "",
                         )
                         if "error" in result:
                             return (f'<div style="color:#e53e3e;padding:0.5rem">'
                                     f'{result["error"]}</div>')
+                        mcp_mode = "custom" if custom_mcp_url else "reference"
                         return (
                             f'<div style="background:#c6f6d5;padding:1rem;'
                             f'border-radius:8px;margin-top:0.5rem">'
                             f'<strong>Submitted!</strong> '
                             f'ID: <code>{result["submission_id"]}</code><br>'
                             f'Status: {result["status"]}<br>'
+                            f'Provider: <strong>{provider}</strong> '
+                            f'/ Model: <strong>{model}</strong><br>'
                             f'MCP mode: <strong>{mcp_mode}</strong><br>'
+                            f'Canary: <code>{result.get("canary_token","")}</code><br>'
                             f'{result.get("message", "")}</div>'
                         )
                     except Exception as e:
@@ -1415,7 +1446,9 @@ def create_app() -> gr.Blocks:
 
                 sub_btn.click(
                     _handle_submit,
-                    [sub_agent, sub_org, sub_url, sub_desc, sub_mcp_mode],
+                    [sub_agent, sub_org, sub_provider, sub_model,
+                     sub_api_key, sub_desc, sub_custom_mcp_url,
+                     sub_custom_mcp_token],
                     sub_result,
                 )
 
@@ -1567,20 +1600,23 @@ def create_app() -> gr.Blocks:
                                 return "<p>No pending submissions.</p>"
                             rows = []
                             for s in pending:
+                                mcp = "custom" if s.get("custom_mcp_url") else "reference"
+                                key_state = "set" if s.get("api_key") else "scrubbed"
                                 rows.append(
-                                    f'<tr><td>{s["submission_id"]}</td>'
+                                    f'<tr><td><code>{s["submission_id"]}</code></td>'
                                     f'<td>{s["agent_name"]}</td>'
                                     f'<td>{s["organization"]}</td>'
-                                    f'<td>{s.get("endpoint_url","")[:40]}'
-                                    f'...</td>'
-                                    f'<td>{s.get("created_at","")[:10]}'
-                                    f'</td></tr>'
+                                    f'<td>{s.get("provider","?")}/{s.get("model_name","?")}</td>'
+                                    f'<td>{mcp}</td>'
+                                    f'<td>{key_state}</td>'
+                                    f'<td>{s.get("created_at","")[:10]}</td></tr>'
                                 )
                             return (
                                 '<table style="width:100%;font-size:0.85rem;'
                                 'border-collapse:collapse">'
                                 "<tr><th>ID</th><th>Agent</th><th>Org</th>"
-                                "<th>URL</th><th>Date</th></tr>"
+                                "<th>Provider/Model</th><th>MCP</th>"
+                                "<th>Key</th><th>Date</th></tr>"
                                 + "".join(rows) + "</table>"
                             )
                         except Exception as e:
@@ -1631,42 +1667,41 @@ def create_app() -> gr.Blocks:
 
                     def _run_dispatch(sid):
                         try:
-                            import asyncio as _aio
                             from eval_queue import get_submission
                             from eval_dispatcher import dispatch_all_tasks
 
                             sub = get_submission(sid.strip())
                             if sub is None:
-                                return (
-                                    '<div style="color:#e53e3e">'
-                                    'Not found</div>'
-                                )
-                            if sub["status"] not in (
-                                "approved", "dispatching"
-                            ):
+                                return ('<div style="color:#e53e3e">'
+                                        'Not found</div>')
+                            if sub["status"] not in ("approved", "dispatching"):
                                 return (
                                     f'<div style="color:#e53e3e">'
                                     f'Cannot dispatch: status='
                                     f'{sub["status"]}</div>'
                                 )
-                            loop = _aio.new_event_loop()
-                            results = loop.run_until_complete(
-                                dispatch_all_tasks(
-                                    sid.strip(),
-                                    sub["endpoint_url"],
+                            if not sub.get("api_key"):
+                                return (
+                                    '<div style="color:#e53e3e">'
+                                    'API key already scrubbed -- this '
+                                    'submission has already been dispatched. '
+                                    'Resubmit if you need to re-run.</div>'
                                 )
-                            )
-                            loop.close()
-                            ok = sum(
-                                1 for r in results if r.get("success")
-                            )
+                            results = dispatch_all_tasks(sid.strip())
+                            ok = sum(1 for r in results if r.get("success"))
                             return (
                                 f'<div style="color:#38a169">'
-                                f'Dispatched: {ok}/{len(results)} '
-                                f'tasks succeeded.</div>'
+                                f'Dispatched: {ok}/{len(results)} tasks '
+                                f'succeeded. API key scrubbed.</div>'
                             )
                         except Exception as e:
-                            return f'<div style="color:#e53e3e">{e}</div>'
+                            import traceback
+                            return (
+                                f'<div style="color:#e53e3e">'
+                                f'<strong>Dispatch error:</strong> {e}<br>'
+                                f'<pre style="font-size:0.7rem">'
+                                f'{traceback.format_exc()[:600]}</pre></div>'
+                            )
 
                     def _run_boltz(sid):
                         try:

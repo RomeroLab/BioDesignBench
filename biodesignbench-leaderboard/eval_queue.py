@@ -53,19 +53,34 @@ VALID_STATUSES = {
 def _make_submission_row(
     agent_name: str,
     organization: str,
-    endpoint_url: str,
+    provider: str,
+    model_name: str,
+    api_key: str,
     description: str = "",
-    mcp_custom: bool = False,
+    custom_mcp_url: str = "",
+    custom_mcp_token: str = "",
+    canary_token: str = "",
 ) -> dict[str, Any]:
-    """Create a new submission row."""
+    """Create a new submission row.
+
+    The submitter's `api_key` is stored on the row only between
+    submission and dispatch; `scrub_credentials()` removes it
+    immediately after the agent loop completes (or fails).
+    """
     now = datetime.now(timezone.utc).isoformat()
     return {
         "submission_id": str(uuid.uuid4())[:12],
         "agent_name": agent_name,
         "organization": organization,
-        "endpoint_url": endpoint_url,
+        "provider": provider,
+        "model_name": model_name,
+        # Transient credentials -- scrubbed after dispatch
+        "api_key": api_key,
+        "custom_mcp_url": custom_mcp_url,
+        "custom_mcp_token": custom_mcp_token,
         "description": description,
-        "mcp_custom": mcp_custom,
+        "mcp_custom": bool(custom_mcp_url),
+        "canary_token": canary_token,
         "status": "pending",
         "created_at": now,
         "updated_at": now,
@@ -127,33 +142,49 @@ def _load_all_rows() -> list[dict[str, Any]]:
     return [dict(row) for row in ds]
 
 
+SUPPORTED_PROVIDERS = {"anthropic", "openai", "deepseek", "google"}
+
+
 def submit(
     agent_name: str,
     organization: str,
-    endpoint_url: str,
+    provider: str,
+    model_name: str,
+    api_key: str,
     description: str = "",
-    mcp_custom: bool = False,
+    custom_mcp_url: str = "",
+    custom_mcp_token: str = "",
 ) -> dict[str, Any]:
     """Create a new submission.
 
     Returns:
         Dict with submission_id and status, or error message.
     """
-    # Rate limit check
+    if not agent_name or not organization or not model_name or not api_key:
+        return {"error": "agent_name, organization, model_name, and api_key are required"}
+
+    if provider not in SUPPORTED_PROVIDERS:
+        return {"error": f"provider must be one of {sorted(SUPPORTED_PROVIDERS)}"}
+
+    if custom_mcp_url and not custom_mcp_url.startswith(("http://", "https://")):
+        return {"error": "custom_mcp_url must start with http:// or https://"}
+
     error = check_rate_limit(organization)
     if error:
         return {"error": error}
 
-    # Validate endpoint URL
-    if not endpoint_url.startswith(("http://", "https://")):
-        return {"error": "Endpoint URL must start with http:// or https://"}
+    canary = uuid.uuid4().hex[:16]
 
     row = _make_submission_row(
         agent_name=agent_name,
         organization=organization,
-        endpoint_url=endpoint_url,
+        provider=provider,
+        model_name=model_name,
+        api_key=api_key,
         description=description,
-        mcp_custom=mcp_custom,
+        custom_mcp_url=custom_mcp_url,
+        custom_mcp_token=custom_mcp_token,
+        canary_token=canary,
     )
 
     rows = _load_all_rows()
@@ -163,9 +194,33 @@ def submit(
         return {
             "submission_id": row["submission_id"],
             "status": "pending",
-            "message": f"Submission created. Awaiting admin approval.",
+            "canary_token": canary,
+            "message": "Submission created. Awaiting admin approval.",
         }
     return {"error": "Failed to save submission. Please try again."}
+
+
+def scrub_credentials(submission_id: str) -> bool:
+    """Remove the submitter's api_key (and custom MCP token) from a row.
+
+    Called immediately after the dispatch phase, regardless of whether
+    the agent loop succeeded. The api_key is forwarded directly from the
+    submission form to the agent loop and is never needed again after
+    that single use.
+    """
+    rows = _load_all_rows()
+    found = False
+    for row in rows:
+        if row.get("submission_id") == submission_id:
+            row["api_key"] = ""
+            row["custom_mcp_token"] = ""
+            row["updated_at"] = datetime.now(timezone.utc).isoformat()
+            found = True
+            break
+    if not found:
+        logger.error(f"scrub_credentials: submission {submission_id} not found")
+        return False
+    return _save_rows(rows)
 
 
 def check_rate_limit(organization: str) -> str | None:

@@ -1,185 +1,77 @@
-"""HTTP task dispatcher — sends benchmark tasks to submitter endpoints.
+"""In-process task dispatcher for contamination-safe submissions.
 
-For each of 76 tasks:
-  1. Build task payload (prompt + tools + PDB data)
-  2. POST to submitter's endpoint with timeout
-  3. Validate response format
-  4. Run CPU-only scoring (approach, orchestration, feasibility, novelty, diversity)
-  5. Save results to submission queue
+Replaces the previous HTTP-endpoint dispatcher: instead of POSTing each
+task to a submitter-hosted endpoint (which leaked task content), this
+runs the agent loop here in the leaderboard backend using:
 
-CPU scoring runs immediately; quality scoring waits for Boltz post-eval.
+  - the submitter's LLM provider + API key (transient, scrubbed after run)
+  - the reference protein-design-mcp endpoint (PROTEIN_MCP_URL secret)
+    or, if the submitter opted in, their own custom MCP URL
+
+For each of the 73 hidden tasks:
+  1. Build the task payload (now includes a per-submission canary token).
+  2. Run the agent loop in process via eval_agent.run_agent_on_task().
+  3. Compute CPU-side scores (approach, orchestration, feasibility,
+     novelty, diversity); quality is deferred to the Boltz post-eval.
+  4. Save the per-task result back to the submission queue.
 """
 
 from __future__ import annotations
 
 import logging
+import os
 import time
 from typing import Any, Generator
 
 logger = logging.getLogger(__name__)
 
-# Response validation limits
+# Sequence/log limits (reused from the old HTTP validator)
 MAX_SEQUENCES = 50
 MAX_SEQUENCE_LENGTH = 2000
 MAX_LOG_ENTRIES = 200
-DISPATCH_TIMEOUT = 300  # seconds per task
+DISPATCH_TIMEOUT = 600  # per-task agent-loop budget (seconds)
 
 
-# ---------------------------------------------------------------------------
-#  Response validation
-# ---------------------------------------------------------------------------
-
-
-def validate_response(response: dict[str, Any]) -> tuple[bool, str]:
-    """Validate the submitter's response format.
-
-    Expected format:
-    {
-        "sequences": ["MKKL...", ...],
-        "run_log": [{"step": 1, "tool": "...", "success": true, ...}, ...],
-        "total_steps": 12,
-        "total_time_sec": 142.5,
-        "metrics": {}
-    }
-
-    Returns:
-        (is_valid, error_message)
-    """
-    if not isinstance(response, dict):
-        return False, "Response must be a JSON object"
-
-    # sequences (required)
-    sequences = response.get("sequences")
+def _validate_agent_output(result: dict[str, Any]) -> tuple[bool, str]:
+    """Sanity-check the result returned by eval_agent.run_agent_on_task."""
+    if not isinstance(result, dict):
+        return False, "agent result must be a dict"
+    if not result.get("success"):
+        return False, result.get("error", "agent loop reported failure")
+    sequences = result.get("sequences") or []
     if not isinstance(sequences, list):
-        return False, "Missing or invalid 'sequences' field (must be a list)"
-
+        return False, "sequences must be a list"
     if len(sequences) > MAX_SEQUENCES:
-        return False, f"Too many sequences: {len(sequences)} > {MAX_SEQUENCES}"
-
-    for i, seq in enumerate(sequences):
-        if not isinstance(seq, str):
+        return False, f"too many sequences: {len(sequences)} > {MAX_SEQUENCES}"
+    for i, s in enumerate(sequences):
+        if not isinstance(s, str):
             return False, f"sequences[{i}] must be a string"
-        if len(seq) > MAX_SEQUENCE_LENGTH:
-            return False, f"sequences[{i}] too long: {len(seq)} > {MAX_SEQUENCE_LENGTH}"
-        if len(seq) == 0:
+        if not s:
             return False, f"sequences[{i}] is empty"
-
-    # run_log (required)
-    run_log = response.get("run_log")
+        if len(s) > MAX_SEQUENCE_LENGTH:
+            return False, f"sequences[{i}] too long: {len(s)} > {MAX_SEQUENCE_LENGTH}"
+    run_log = result.get("run_log") or []
     if not isinstance(run_log, list):
-        return False, "Missing or invalid 'run_log' field (must be a list)"
-
+        return False, "run_log must be a list"
     if len(run_log) > MAX_LOG_ENTRIES:
-        return False, f"Too many log entries: {len(run_log)} > {MAX_LOG_ENTRIES}"
-
-    for i, entry in enumerate(run_log):
-        if not isinstance(entry, dict):
-            return False, f"run_log[{i}] must be a dict"
-        if "tool" not in entry:
-            return False, f"run_log[{i}] missing 'tool' field"
-
-    # Optional fields — validate types if present
-    if "total_steps" in response:
-        if not isinstance(response["total_steps"], (int, float)):
-            return False, "'total_steps' must be a number"
-
-    if "total_time_sec" in response:
-        if not isinstance(response["total_time_sec"], (int, float)):
-            return False, "'total_time_sec' must be a number"
-
+        return False, f"too many run_log entries: {len(run_log)} > {MAX_LOG_ENTRIES}"
     return True, ""
 
 
-# ---------------------------------------------------------------------------
-#  Single task dispatch
-# ---------------------------------------------------------------------------
+def _resolve_mcp(submission: dict[str, Any]) -> tuple[str, str]:
+    """Pick the MCP endpoint for this submission.
 
-
-async def dispatch_single_task(
-    endpoint_url: str,
-    task_payload: dict[str, Any],
-    timeout: int = DISPATCH_TIMEOUT,
-) -> dict[str, Any]:
-    """Send a single task to the submitter's endpoint.
-
-    Args:
-        endpoint_url: Submitter's POST endpoint URL.
-        task_payload: Task payload from eval_tasks.build_task_payload().
-        timeout: Request timeout in seconds.
-
-    Returns:
-        Dict with: success, task_id, response (if success), error (if failed),
-        latency_sec.
+    Custom MCP URL takes priority if the submitter opted in; otherwise
+    we fall back to the lab-hosted reference protein-design-mcp at
+    PROTEIN_MCP_URL (set as an HF Space secret).
     """
-    import httpx
-
-    task_id = task_payload["task_id"]
-    start = time.monotonic()
-
-    try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            resp = await client.post(
-                endpoint_url,
-                json=task_payload,
-                headers={"Content-Type": "application/json"},
-            )
-            latency = time.monotonic() - start
-
-            if resp.status_code != 200:
-                return {
-                    "success": False,
-                    "task_id": task_id,
-                    "error": f"HTTP {resp.status_code}: {resp.text[:200]}",
-                    "latency_sec": round(latency, 1),
-                }
-
-            try:
-                data = resp.json()
-            except Exception:
-                return {
-                    "success": False,
-                    "task_id": task_id,
-                    "error": "Response is not valid JSON",
-                    "latency_sec": round(latency, 1),
-                }
-
-            is_valid, error_msg = validate_response(data)
-            if not is_valid:
-                return {
-                    "success": False,
-                    "task_id": task_id,
-                    "error": f"Invalid response: {error_msg}",
-                    "latency_sec": round(latency, 1),
-                }
-
-            return {
-                "success": True,
-                "task_id": task_id,
-                "response": data,
-                "latency_sec": round(latency, 1),
-            }
-
-    except httpx.TimeoutException:
-        latency = time.monotonic() - start
-        return {
-            "success": False,
-            "task_id": task_id,
-            "error": f"Timeout after {timeout}s",
-            "latency_sec": round(latency, 1),
-        }
-    except Exception as e:
-        latency = time.monotonic() - start
-        return {
-            "success": False,
-            "task_id": task_id,
-            "error": f"Connection error: {str(e)[:200]}",
-            "latency_sec": round(latency, 1),
-        }
-
-
-# ---------------------------------------------------------------------------
-#  CPU scoring (runs immediately, no GPU needed)
-# ---------------------------------------------------------------------------
+    custom_url = (submission.get("custom_mcp_url") or "").strip()
+    if custom_url:
+        return custom_url, (submission.get("custom_mcp_token") or "").strip()
+    return (
+        os.environ.get("PROTEIN_MCP_URL", "").strip(),
+        os.environ.get("PROTEIN_MCP_TOKEN", "").strip(),
+    )
 
 
 def score_cpu_components(
@@ -189,20 +81,10 @@ def score_cpu_components(
     ground_truth: dict[str, Any],
     oracle_sequences: list[str] | None = None,
 ) -> dict[str, Any]:
-    """Run CPU-only scoring components.
+    """Run CPU-only scoring components for one task.
 
-    Scores: approach, orchestration, feasibility, novelty, diversity.
-    Quality scoring is deferred until Boltz post-eval provides pLDDT/ipTM.
-
-    Args:
-        task_id: Task identifier.
-        sequences: Designed sequences from submitter.
-        run_log: Tool call log from submitter.
-        ground_truth: Ground truth data for this task.
-        oracle_sequences: Oracle sequences for non-binding tasks.
-
-    Returns:
-        Dict with partial scores and metadata for later Boltz completion.
+    Quality is deferred until the Boltz post-eval supplies pLDDT/ipTM
+    metrics; the other 5 components are computed here.
     """
     from eval_scorer import (
         get_category,
@@ -213,7 +95,6 @@ def score_cpu_components(
         score_orchestration,
     )
 
-    # Extract fields
     thresholds = ground_truth.get("thresholds", {})
     reference_seq = ground_truth.get("reference_sequence")
     constraints = ground_truth.get("design_constraints", {})
@@ -225,27 +106,16 @@ def score_cpu_components(
     tools_used = [e.get("tool", "") for e in run_log if e.get("tool")]
 
     approach_result = score_approach(
-        tools_used=tools_used,
-        tools_expected=tools_expected,
-        task_type=task_type,
+        tools_used=tools_used, tools_expected=tools_expected, task_type=task_type,
     )
     orchestration_result = score_orchestration(
-        tool_call_log=run_log,
-        task_id=task_id,
+        tool_call_log=run_log, task_id=task_id,
     )
-    feasibility_result = score_feasibility(
-        designs=sequences,
-        constraints=constraints,
-    )
+    feasibility_result = score_feasibility(designs=sequences, constraints=constraints)
     novelty_result = score_novelty(
-        designs=sequences,
-        reference_seq=reference_seq,
-        thresholds=thresholds,
+        designs=sequences, reference_seq=reference_seq, thresholds=thresholds,
     )
-    diversity_result = score_diversity(
-        designs=sequences,
-        max_designs=max_designs,
-    )
+    diversity_result = score_diversity(designs=sequences, max_designs=max_designs)
 
     return {
         "task_id": task_id,
@@ -265,97 +135,117 @@ def score_cpu_components(
             "novelty": novelty_result,
             "diversity": diversity_result,
         },
-        "quality_pending": True,  # Needs Boltz post-eval
+        "quality_pending": True,
         "oracle_sequences": oracle_sequences or [],
         "ground_truth_thresholds": thresholds,
     }
 
 
-# ---------------------------------------------------------------------------
-#  Full dispatch pipeline
-# ---------------------------------------------------------------------------
-
-
-async def dispatch_all_tasks(
+def dispatch_all_tasks(
     submission_id: str,
-    endpoint_url: str,
     progress_callback=None,
-) -> Generator[dict[str, Any], None, None]:
-    """Dispatch all hidden tasks to a submitter endpoint.
+) -> list[dict[str, Any]]:
+    """Run the agent loop on every hidden task for one submission.
 
-    Yields progress updates as each task completes. Saves results
-    to the submission queue incrementally.
-
-    Args:
-        submission_id: Submission ID for queue tracking.
-        endpoint_url: Submitter's POST endpoint.
-        progress_callback: Optional callback(task_id, i, total, result)
-            for streaming progress updates.
-
-    Returns:
-        List of per-task results.
+    Loads the submission record (including the transient api_key),
+    picks the MCP endpoint, runs eval_agent.run_agent_on_task() per
+    task, scores the CPU components, and persists each per-task result
+    back into the submission record. Scrubs the api_key and custom MCP
+    token from the record at the end.
     """
-    from eval_queue import save_task_result, update_status
+    from eval_agent import run_agent_on_task
+    from eval_queue import (
+        get_submission, save_task_result, scrub_credentials, update_status,
+    )
     from eval_tasks import build_task_payload, get_hidden_task_ids, get_task
+
+    sub = get_submission(submission_id)
+    if sub is None:
+        logger.error(f"dispatch_all_tasks: submission {submission_id} not found")
+        return []
+
+    api_key = (sub.get("api_key") or "").strip()
+    if not api_key:
+        update_status(submission_id, "failed",
+                      error_message="api_key missing or already scrubbed")
+        return []
+
+    provider = sub.get("provider") or ""
+    model = sub.get("model_name") or ""
+    canary_token = sub.get("canary_token") or ""
+    mcp_url, mcp_token = _resolve_mcp(sub)
 
     task_ids = get_hidden_task_ids()
     total = len(task_ids)
-    results = []
-
     update_status(submission_id, "dispatching", tasks_total=total)
 
-    for i, task_id in enumerate(task_ids):
-        # Build payload
-        payload = build_task_payload(task_id)
-        if payload is None:
-            result = {
-                "task_id": task_id,
-                "success": False,
-                "error": "Task not found",
-            }
-            results.append(result)
-            save_task_result(submission_id, task_id, result)
-            continue
+    results: list[dict[str, Any]] = []
 
-        # Dispatch
-        dispatch_result = await dispatch_single_task(endpoint_url, payload)
+    try:
+        for i, task_id in enumerate(task_ids):
+            payload = build_task_payload(task_id, canary_token=canary_token)
+            if payload is None:
+                results.append({
+                    "task_id": task_id, "success": False, "error": "Task not found",
+                })
+                save_task_result(submission_id, task_id, results[-1])
+                continue
 
-        if dispatch_result["success"]:
-            # Run CPU scoring
-            task_data = get_task(task_id)
-            ground_truth = task_data["ground_truth"] if task_data else {}
-            oracle_seqs = task_data.get("oracle_sequences", []) if task_data else []
+            t0 = time.monotonic()
+            try:
+                agent_result = run_agent_on_task(
+                    provider=provider,
+                    api_key=api_key,
+                    model=model,
+                    task_prompt=payload["task_description"],
+                    mcp_url=mcp_url,
+                    mcp_token=mcp_token,
+                )
+            except Exception as e:
+                logger.exception(f"agent loop crashed for task {task_id}")
+                agent_result = {
+                    "success": False,
+                    "error": f"agent loop crashed: {type(e).__name__}: {str(e)[:300]}",
+                }
+            latency = round(time.monotonic() - t0, 1)
 
-            response = dispatch_result["response"]
-            cpu_result = score_cpu_components(
-                task_id=task_id,
-                sequences=response["sequences"],
-                run_log=response["run_log"],
-                ground_truth=ground_truth,
-                oracle_sequences=oracle_seqs,
+            ok, err = _validate_agent_output(agent_result)
+            if not ok:
+                result = {
+                    "task_id": task_id, "success": False, "error": err,
+                    "latency_sec": latency,
+                }
+                results.append(result)
+                save_task_result(submission_id, task_id, result)
+            else:
+                task_data = get_task(task_id) or {}
+                ground_truth = task_data.get("ground_truth", {}) if task_data else {}
+                oracle_seqs = task_data.get("oracle_sequences", []) if task_data else []
+
+                cpu_result = score_cpu_components(
+                    task_id=task_id,
+                    sequences=agent_result["sequences"],
+                    run_log=agent_result["run_log"],
+                    ground_truth=ground_truth,
+                    oracle_sequences=oracle_seqs,
+                )
+                cpu_result["latency_sec"] = latency
+                cpu_result["success"] = True
+                cpu_result["agent_metrics"] = agent_result.get("metrics", {})
+                cpu_result["agent_total_steps"] = agent_result.get("total_steps", 0)
+                results.append(cpu_result)
+                save_task_result(submission_id, task_id, cpu_result)
+
+            if progress_callback:
+                progress_callback(task_id, i + 1, total, results[-1])
+
+            logger.info(
+                f"[{i+1}/{total}] {task_id}: "
+                f"{'OK' if results[-1].get('success') else 'FAIL'} "
+                f"({results[-1].get('latency_sec', 0):.1f}s)"
             )
-            cpu_result["latency_sec"] = dispatch_result["latency_sec"]
-            cpu_result["success"] = True
-            cpu_result["agent_metrics"] = response.get("metrics", {})
-            results.append(cpu_result)
-            save_task_result(submission_id, task_id, cpu_result)
-        else:
-            result = {
-                "task_id": task_id,
-                "success": False,
-                "error": dispatch_result["error"],
-                "latency_sec": dispatch_result.get("latency_sec"),
-            }
-            results.append(result)
-            save_task_result(submission_id, task_id, result)
-
-        if progress_callback:
-            progress_callback(task_id, i + 1, total, results[-1])
-
-        logger.info(
-            f"[{i+1}/{total}] {task_id}: "
-            f"{'OK' if results[-1].get('success') else 'FAIL'} "
-            f"({results[-1].get('latency_sec', 0):.1f}s)"
-        )
+    finally:
+        # Always scrub credentials, regardless of success/failure
+        scrub_credentials(submission_id)
 
     return results
