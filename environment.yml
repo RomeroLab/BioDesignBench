@@ -1,0 +1,88 @@
+# BioDesignBench - Complete Environment (Python 3.11)
+# Install: conda env create -f environment.yml
+# Update: conda env update -f environment.yml --prune
+# Activate: conda activate biodesignbench
+
+name: biodesignbench
+channels:
+  - conda-forge
+  - bioconda
+  - pytorch
+  - defaults
+
+dependencies:
+  # Core Python
+  - python=3.11
+  - pip
+
+  # Data Science
+  - numpy>=1.24
+  - pandas>=2.0
+  - scipy>=1.10
+  - scikit-learn>=1.3
+
+  # Bio Libraries (conda)
+  - biopython>=1.81
+
+  # PyTorch (CPU - change to pytorch-cuda=11.8 for GPU)
+  - pytorch>=2.0
+  - torchvision
+
+  # Testing & Quality
+  - pytest>=9.0
+  - pytest-cov>=4.0
+  - pytest-asyncio>=0.21
+  - black>=23.0
+  - isort>=5.12
+  - mypy>=1.0
+  - ruff>=0.1
+
+  # Utilities
+  - pyyaml>=6.0
+  - requests>=2.28
+  - tqdm>=4.65
+  - rich>=13.0
+  - click>=8.1
+
+  # Jupyter (for analysis)
+  - jupyterlab>=4.0
+  - matplotlib>=3.7
+  - seaborn>=0.12
+
+  # Pip-only packages
+  - pip:
+    # === Project Core ===
+    - pydantic>=2.0
+    - jsonschema>=4.17
+    - python-dotenv>=1.0
+    - docker>=7.0
+    - aiohttp>=3.8
+    - aiofiles>=23.0
+
+    # === Bio Tools ===
+    - biotite>=0.37
+    - prody>=2.4
+    - tmtools>=0.1
+
+    # === LLM API Clients (for general-purpose agents) ===
+    - anthropic>=0.75
+    - openai>=1.12
+    - google-generativeai>=0.8
+
+    # === Bio-Specific Agent Packages ===
+    # Biomni - Stanford's bio-specific agent (requires Python 3.11+)
+    - biomni @ git+https://github.com/snap-stanford/Biomni.git@main
+    # AIDE (BioML) - ML-focused tree-search agent
+    # NOTE: aideml>=0.2 pins pytest<8. We override with pytest>=9 via conda above.
+    - aideml>=0.2
+    # NOTE: open-interpreter pins anthropic<0.38, conflicting with >=0.75.
+    # Install separately if needed: pip install open-interpreter --no-deps
+
+    # === LangChain (required by biomni) ===
+    - langchain-openai
+    - langchain-anthropic
+    - langchain-google-genai
+    - langchain-community
+
+    # === Install BioDesignBench itself (editable) ===
+    - -e .

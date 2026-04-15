@@ -1,0 +1,534 @@
+{
+  "last_updated": "2026-04-14",
+  "paper_title": "Evaluating LLM-Driven Protein Design: Agents Lack Iterative Evaluation Depth",
+  "headline_findings": [
+    "Top-tier LLM agents (DeepSeek V3, GPT-5) now surpass a deterministic hardcoded pipeline.",
+    "All agents show a critical evaluation depth gap \u2014 they invoke evaluation tools at only 14% of expert frequency.",
+    "Workflow guidance rescues tool coverage (Rescue Index up to +3.01) but not utilisation depth (Rescue Index \u2248 0).",
+    "Evaluation depth predicts design quality (\u03c1 = 0.685, p < 10\u207b\u00b9\u00b9\u2077) beyond binary tool selection.",
+    "Forced-depth intervention lifts the strongest agent (DeepSeek V3) by +9.3 points on 18 tasks, while a low-diversity control hurts it (-2.3) \u2014 evidence that depth, not process change alone, drives the gain."
+  ],
+  "scoring": {
+    "rubric_max": 100,
+    "components": {
+      "approach": 20,
+      "orchestration": 15,
+      "quality": 35,
+      "feasibility": 15,
+      "novelty": 5,
+      "diversity": 10
+    },
+    "method": "Hybrid: 72 algorithmic points (Boltz-2 verification) + 28 LLM-judge points (3-judge panel with self-exclusion)."
+  },
+  "entries": [
+    {
+      "agent_name": "Human Oracle",
+      "agent_id": "oracle",
+      "mode": null,
+      "submission_type": "human_oracle",
+      "organization": "Romero Lab",
+      "mcp_custom": false,
+      "overall_score": 74.85,
+      "component_scores": {
+        "approach": 20.0,
+        "orchestration": 15.0,
+        "quality": 26.24,
+        "feasibility": 10.26,
+        "novelty": 2.93,
+        "diversity": 0.43
+      },
+      "taxonomy_scores": {
+        "de_novo": {
+          "antibody": 79.2,
+          "binder": 71.8,
+          "enzyme": 75.6,
+          "fluorescent_protein": 78.7,
+          "scaffold": 75.8
+        },
+        "redesign": {
+          "antibody": 69.2,
+          "enzyme": 76.2,
+          "fluorescent_protein": 77.1,
+          "scaffold": 76.8
+        }
+      },
+      "tasks_completed": 76,
+      "tasks_total": 76,
+      "tasks_with_zero": 0,
+      "avg_latency_sec": null,
+      "submission_date": "2026-04-06"
+    },
+    {
+      "agent_name": "Human Expert",
+      "agent_id": "human-expert",
+      "mode": null,
+      "submission_type": "human_expert",
+      "organization": "Romero Lab",
+      "mcp_custom": false,
+      "overall_score": 61.25,
+      "component_scores": {
+        "approach": 13.81,
+        "orchestration": 8.86,
+        "quality": 20.91,
+        "feasibility": 10.79,
+        "novelty": 3.46,
+        "diversity": 3.43
+      },
+      "taxonomy_scores": {
+        "de_novo": {
+          "antibody": 65.6,
+          "binder": 65.0,
+          "enzyme": 55.3,
+          "fluorescent_protein": 57.2,
+          "scaffold": 65.4
+        },
+        "redesign": {
+          "antibody": 52.4,
+          "enzyme": 59.5,
+          "fluorescent_protein": 54.6,
+          "scaffold": 53.7
+        }
+      },
+      "tasks_completed": 76,
+      "tasks_total": 76,
+      "tasks_with_zero": 0,
+      "avg_latency_sec": null,
+      "submission_date": "2026-04-06"
+    },
+    {
+      "agent_name": "DeepSeek V3",
+      "agent_id": "deepseek-v3-benchmark",
+      "mode": "benchmark",
+      "submission_type": "llm",
+      "organization": "DeepSeek",
+      "mcp_custom": false,
+      "overall_score": 60.43,
+      "component_scores": {
+        "approach": 11.4,
+        "orchestration": 9.36,
+        "quality": 22.07,
+        "feasibility": 10.77,
+        "novelty": 3.44,
+        "diversity": 3.38
+      },
+      "taxonomy_scores": {
+        "de_novo": {
+          "antibody": 65.0,
+          "binder": 63.4,
+          "enzyme": 53.9,
+          "fluorescent_protein": 72.3,
+          "scaffold": 57.8
+        },
+        "redesign": {
+          "antibody": 61.3,
+          "enzyme": 59.3,
+          "fluorescent_protein": 56.9,
+          "scaffold": 66.9
+        }
+      },
+      "tasks_completed": 76,
+      "tasks_total": 76,
+      "tasks_with_zero": 1,
+      "avg_latency_sec": null,
+      "submission_date": "2026-04-06"
+    },
+    {
+      "agent_name": "DeepSeek V3",
+      "agent_id": "deepseek-v3-user",
+      "mode": "user",
+      "submission_type": "llm",
+      "organization": "DeepSeek",
+      "mcp_custom": false,
+      "overall_score": 58.46,
+      "component_scores": {
+        "approach": 11.09,
+        "orchestration": 9.14,
+        "quality": 21.74,
+        "feasibility": 9.91,
+        "novelty": 3.25,
+        "diversity": 3.33
+      },
+      "taxonomy_scores": {
+        "de_novo": {
+          "antibody": 65.6,
+          "binder": 63.0,
+          "enzyme": 64.2,
+          "fluorescent_protein": 64.2,
+          "scaffold": 60.4
+        },
+        "redesign": {
+          "antibody": 61.6,
+          "enzyme": 60.7,
+          "fluorescent_protein": 43.0,
+          "scaffold": 44.1
+        }
+      },
+      "tasks_completed": 76,
+      "tasks_total": 76,
+      "tasks_with_zero": 7,
+      "avg_latency_sec": null,
+      "submission_date": "2026-04-06"
+    },
+    {
+      "agent_name": "GPT-5",
+      "agent_id": "gpt5-benchmark",
+      "mode": "benchmark",
+      "submission_type": "llm",
+      "organization": "OpenAI",
+      "mcp_custom": false,
+      "overall_score": 55.61,
+      "component_scores": {
+        "approach": 8.76,
+        "orchestration": 6.84,
+        "quality": 22.96,
+        "feasibility": 10.03,
+        "novelty": 3.27,
+        "diversity": 3.75
+      },
+      "taxonomy_scores": {
+        "de_novo": {
+          "antibody": 62.6,
+          "binder": 59.9,
+          "enzyme": 55.9,
+          "fluorescent_protein": 53.9,
+          "scaffold": 56.1
+        },
+        "redesign": {
+          "antibody": 47.3,
+          "enzyme": 54.4,
+          "fluorescent_protein": 49.5,
+          "scaffold": 54.6
+        }
+      },
+      "tasks_completed": 76,
+      "tasks_total": 76,
+      "tasks_with_zero": 2,
+      "avg_latency_sec": null,
+      "submission_date": "2026-04-06"
+    },
+    {
+      "agent_name": "GPT-5",
+      "agent_id": "gpt5-user",
+      "mode": "user",
+      "submission_type": "llm",
+      "organization": "OpenAI",
+      "mcp_custom": false,
+      "overall_score": 55.26,
+      "component_scores": {
+        "approach": 9.46,
+        "orchestration": 8.29,
+        "quality": 20.83,
+        "feasibility": 9.9,
+        "novelty": 3.2,
+        "diversity": 3.58
+      },
+      "taxonomy_scores": {
+        "de_novo": {
+          "antibody": 61.2,
+          "binder": 56.1,
+          "enzyme": 57.9,
+          "fluorescent_protein": 61.3,
+          "scaffold": 55.6
+        },
+        "redesign": {
+          "antibody": 52.1,
+          "enzyme": 54.2,
+          "fluorescent_protein": 55.7,
+          "scaffold": 46.3
+        }
+      },
+      "tasks_completed": 76,
+      "tasks_total": 76,
+      "tasks_with_zero": 4,
+      "avg_latency_sec": null,
+      "submission_date": "2026-04-06"
+    },
+    {
+      "agent_name": "Hardcoded Pipeline",
+      "agent_id": "hardcoded-pipeline",
+      "mode": null,
+      "submission_type": "hardcoded",
+      "organization": "Deterministic",
+      "mcp_custom": false,
+      "overall_score": 54.2,
+      "component_scores": {
+        "approach": 10.19,
+        "orchestration": 8.3,
+        "quality": 19.91,
+        "feasibility": 10.26,
+        "novelty": 2.48,
+        "diversity": 3.08
+      },
+      "taxonomy_scores": {
+        "de_novo": {
+          "antibody": 60.8,
+          "binder": 59.8,
+          "enzyme": 46.0,
+          "fluorescent_protein": 62.6,
+          "scaffold": 55.0
+        },
+        "redesign": {
+          "antibody": 45.4,
+          "enzyme": 50.7,
+          "fluorescent_protein": 49.5,
+          "scaffold": 50.3
+        }
+      },
+      "tasks_completed": 76,
+      "tasks_total": 76,
+      "tasks_with_zero": 0,
+      "avg_latency_sec": null,
+      "submission_date": "2026-04-06"
+    },
+    {
+      "agent_name": "Claude Sonnet 4.5",
+      "agent_id": "sonnet-4.5-user",
+      "mode": "user",
+      "submission_type": "llm",
+      "organization": "Anthropic",
+      "mcp_custom": false,
+      "overall_score": 50.23,
+      "component_scores": {
+        "approach": 9.63,
+        "orchestration": 8.54,
+        "quality": 17.31,
+        "feasibility": 9.03,
+        "novelty": 2.68,
+        "diversity": 3.05
+      },
+      "taxonomy_scores": {
+        "de_novo": {
+          "antibody": 66.3,
+          "binder": 56.5,
+          "enzyme": 56.9,
+          "fluorescent_protein": 62.8,
+          "scaffold": 57.9
+        },
+        "redesign": {
+          "antibody": 43.1,
+          "enzyme": 37.5,
+          "fluorescent_protein": 32.8,
+          "scaffold": 42.0
+        }
+      },
+      "tasks_completed": 76,
+      "tasks_total": 76,
+      "tasks_with_zero": 16,
+      "avg_latency_sec": null,
+      "submission_date": "2026-04-06"
+    },
+    {
+      "agent_name": "Claude Sonnet 4.5",
+      "agent_id": "sonnet-4.5-benchmark",
+      "mode": "benchmark",
+      "submission_type": "llm",
+      "organization": "Anthropic",
+      "mcp_custom": false,
+      "overall_score": 41.17,
+      "component_scores": {
+        "approach": 7.92,
+        "orchestration": 6.93,
+        "quality": 13.54,
+        "feasibility": 8.2,
+        "novelty": 2.25,
+        "diversity": 2.33
+      },
+      "taxonomy_scores": {
+        "de_novo": {
+          "antibody": 29.5,
+          "binder": 55.5,
+          "enzyme": 29.6,
+          "fluorescent_protein": 45.9,
+          "scaffold": 41.2
+        },
+        "redesign": {
+          "antibody": 34.6,
+          "enzyme": 29.5,
+          "fluorescent_protein": 35.3,
+          "scaffold": 40.9
+        }
+      },
+      "tasks_completed": 76,
+      "tasks_total": 76,
+      "tasks_with_zero": 23,
+      "avg_latency_sec": null,
+      "submission_date": "2026-04-06"
+    },
+    {
+      "agent_name": "Gemini 2.5 Pro",
+      "agent_id": "gemini-2.5-pro-user",
+      "mode": "user",
+      "submission_type": "llm",
+      "organization": "Google",
+      "mcp_custom": false,
+      "overall_score": 8.75,
+      "component_scores": {
+        "approach": 3.37,
+        "orchestration": 2.79,
+        "quality": 0.55,
+        "feasibility": 1.15,
+        "novelty": 0.49,
+        "diversity": 0.41
+      },
+      "taxonomy_scores": {
+        "de_novo": {
+          "antibody": 10.8,
+          "binder": 9.3,
+          "enzyme": 30.2,
+          "fluorescent_protein": 3.1,
+          "scaffold": 9.2
+        },
+        "redesign": {
+          "antibody": 8.0,
+          "enzyme": 4.9,
+          "fluorescent_protein": 6.8,
+          "scaffold": 8.6
+        }
+      },
+      "tasks_completed": 76,
+      "tasks_total": 76,
+      "tasks_with_zero": 74,
+      "avg_latency_sec": null,
+      "submission_date": "2026-04-06"
+    },
+    {
+      "agent_name": "Gemini 2.5 Pro",
+      "agent_id": "gemini-2.5-pro-benchmark",
+      "mode": "benchmark",
+      "submission_type": "llm",
+      "organization": "Google",
+      "mcp_custom": false,
+      "overall_score": 8.11,
+      "component_scores": {
+        "approach": 3.58,
+        "orchestration": 2.47,
+        "quality": 0.34,
+        "feasibility": 0.93,
+        "novelty": 0.42,
+        "diversity": 0.37
+      },
+      "taxonomy_scores": {
+        "de_novo": {
+          "antibody": 9.1,
+          "binder": 9.2,
+          "enzyme": 11.0,
+          "fluorescent_protein": 3.1,
+          "scaffold": 9.1
+        },
+        "redesign": {
+          "antibody": 7.3,
+          "enzyme": 4.4,
+          "fluorescent_protein": 6.2,
+          "scaffold": 11.4
+        }
+      },
+      "tasks_completed": 76,
+      "tasks_total": 76,
+      "tasks_with_zero": 75,
+      "avg_latency_sec": null,
+      "submission_date": "2026-04-06"
+    }
+  ],
+  "interventions": {
+    "description": "Causal intervention experiments on the depth gap. 18 representative tasks rerun under three conditions: baseline (no intervention), forced_depth (mandate \u22653 evaluation passes per candidate), and low_diversity_control (constrain candidate count without forcing depth).",
+    "n_tasks": 18,
+    "rows": [
+      {
+        "label": "DeepSeek V3 \u2014 baseline",
+        "condition": "baseline",
+        "agent": "deepseek-v3-tools-benchmark",
+        "n_tasks": 18,
+        "score": 58.72,
+        "delta_vs_baseline": 0.0,
+        "approach": 13.44,
+        "orchestration": 11.17,
+        "quality": 16.11,
+        "diversity": 3.56
+      },
+      {
+        "label": "GPT-5 \u2014 baseline",
+        "condition": "baseline",
+        "agent": "gpt5-tools-benchmark",
+        "n_tasks": 18,
+        "score": 46.78,
+        "delta_vs_baseline": 0.0,
+        "approach": 8.33,
+        "orchestration": 6.22,
+        "quality": 15.39,
+        "diversity": 3.94
+      },
+      {
+        "label": "Human Expert \u2014 baseline",
+        "condition": "baseline",
+        "agent": "human-expert-agent",
+        "n_tasks": 18,
+        "score": 56.67,
+        "delta_vs_baseline": 0.0,
+        "approach": 18.28,
+        "orchestration": 9.28,
+        "quality": 11.06,
+        "diversity": 2.28
+      },
+      {
+        "label": "DeepSeek V3 \u2014 forced depth",
+        "condition": "forced_depth",
+        "agent": "deepseek-v3-forced-depth",
+        "n_tasks": 18,
+        "score": 68.06,
+        "delta_vs_baseline": 9.34,
+        "approach": 18.39,
+        "orchestration": 12.28,
+        "quality": 16.11,
+        "diversity": 3.94
+      },
+      {
+        "label": "GPT-5 \u2014 forced depth",
+        "condition": "forced_depth",
+        "agent": "gpt5-tools-forced-depth",
+        "n_tasks": 18,
+        "score": 62.67,
+        "delta_vs_baseline": 15.89,
+        "approach": 18.28,
+        "orchestration": 11.67,
+        "quality": 15.0,
+        "diversity": 3.06
+      },
+      {
+        "label": "DeepSeek V3 \u2014 low diversity",
+        "condition": "low_diversity_control",
+        "agent": "deepseek-v3-low-diversity",
+        "n_tasks": 18,
+        "score": 56.39,
+        "delta_vs_baseline": -2.33,
+        "approach": 13.11,
+        "orchestration": 11.11,
+        "quality": 16.0,
+        "diversity": 3.22
+      },
+      {
+        "label": "GPT-5 \u2014 low diversity",
+        "condition": "low_diversity_control",
+        "agent": "gpt5-tools-low-diversity",
+        "n_tasks": 18,
+        "score": 61.5,
+        "delta_vs_baseline": 14.72,
+        "approach": 13.06,
+        "orchestration": 12.0,
+        "quality": 16.22,
+        "diversity": 3.22
+      },
+      {
+        "label": "Human Expert \u2014 shallow",
+        "condition": "low_diversity_control",
+        "agent": "human-expert-shallow",
+        "n_tasks": 18,
+        "score": 55.06,
+        "delta_vs_baseline": -1.61,
+        "approach": 18.22,
+        "orchestration": 9.28,
+        "quality": 11.17,
+        "diversity": 0.61
+      }
+    ]
+  }
+}

@@ -1,0 +1,53 @@
+# Byte-compiled
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+.env
+
+# Test / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.mypy_cache/
+.ruff_cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Local data — task content is intentionally NOT in this repo
+tasks/
+data/
+results/
+workspaces/
+logs/
+figures/
+reports/
+alphafold_structures/
+split_chains/
+*.pdb
+*.fasta
+*.log
+
+# Local configuration
+*.local
+.envrc
+
+# Notebook checkpoints
+.ipynb_checkpoints/

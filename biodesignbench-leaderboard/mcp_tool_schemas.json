@@ -1,0 +1,468 @@
+[
+  {
+    "name": "design_binder",
+    "description": "Design protein binders for a target protein. Runs RFdiffusion -> ProteinMPNN -> ESMFold pipeline.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "target_pdb": {
+          "type": "string",
+          "description": "Path to target protein PDB file"
+        },
+        "hotspot_residues": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Target residues for binder interface, e.g. ['A45', 'A46']"
+        },
+        "num_designs": {
+          "type": "integer",
+          "description": "Number of designs to generate (default: 10)",
+          "default": 10
+        },
+        "binder_length": {
+          "type": "integer",
+          "description": "Binder length in residues (default: 80)",
+          "default": 80
+        }
+      },
+      "required": [
+        "target_pdb",
+        "hotspot_residues"
+      ]
+    }
+  },
+  {
+    "name": "analyze_interface",
+    "description": "Analyze protein-protein interface: buried surface area, H-bonds, salt bridges, hydrophobic contacts.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "complex_pdb": {
+          "type": "string",
+          "description": "Path to complex PDB file"
+        },
+        "chain_a": {
+          "type": "string",
+          "description": "Chain ID of first protein"
+        },
+        "chain_b": {
+          "type": "string",
+          "description": "Chain ID of second protein"
+        }
+      },
+      "required": [
+        "complex_pdb",
+        "chain_a",
+        "chain_b"
+      ]
+    }
+  },
+  {
+    "name": "validate_design",
+    "description": "Validate a designed sequence by predicting its structure (ESMFold/AlphaFold2) and computing pLDDT, pTM.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "sequence": {
+          "type": "string",
+          "description": "Amino acid sequence to validate"
+        },
+        "expected_structure": {
+          "type": "string",
+          "description": "Optional PDB path for RMSD comparison"
+        },
+        "predictor": {
+          "type": "string",
+          "enum": [
+            "esmfold",
+            "alphafold2"
+          ],
+          "default": "esmfold",
+          "description": "Structure predictor to use"
+        }
+      },
+      "required": [
+        "sequence"
+      ]
+    }
+  },
+  {
+    "name": "optimize_sequence",
+    "description": "Optimize binder sequence for improved stability and/or binding affinity.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "current_sequence": {
+          "type": "string",
+          "description": "Starting amino acid sequence"
+        },
+        "target_pdb": {
+          "type": "string",
+          "description": "Path to target protein PDB"
+        },
+        "optimization_target": {
+          "type": "string",
+          "enum": [
+            "stability",
+            "affinity",
+            "both"
+          ],
+          "default": "both"
+        },
+        "fixed_positions": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          },
+          "description": "Positions to keep fixed (1-indexed)"
+        }
+      },
+      "required": [
+        "current_sequence",
+        "target_pdb"
+      ]
+    }
+  },
+  {
+    "name": "suggest_hotspots",
+    "description": "Analyze target protein and suggest binding hotspots using structure, conservation, and literature.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "target": {
+          "type": "string",
+          "description": "Protein name, UniProt ID, PDB ID, or local PDB path"
+        },
+        "chain_id": {
+          "type": "string",
+          "description": "Chain to analyze (default: first)"
+        },
+        "criteria": {
+          "type": "string",
+          "enum": [
+            "druggable",
+            "exposed",
+            "conserved"
+          ],
+          "default": "exposed"
+        },
+        "include_literature": {
+          "type": "boolean",
+          "default": false,
+          "description": "Search PubMed for known binders"
+        }
+      },
+      "required": [
+        "target"
+      ]
+    }
+  },
+  {
+    "name": "get_design_status",
+    "description": "Check status of running design jobs.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "job_id": {
+          "type": "string",
+          "description": "Job ID from design_binder call"
+        }
+      },
+      "required": [
+        "job_id"
+      ]
+    }
+  },
+  {
+    "name": "predict_complex",
+    "description": "Predict protein complex structure using AlphaFold2-Multimer.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "sequences": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of sequences, one per chain"
+        },
+        "chain_names": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Optional chain identifiers"
+        }
+      },
+      "required": [
+        "sequences"
+      ]
+    }
+  },
+  {
+    "name": "predict_structure",
+    "description": "Predict the 3D structure of a single protein chain using ESMFold or AlphaFold2. Returns predicted PDB, pLDDT, and pTM scores.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "sequence": {
+          "type": "string",
+          "description": "Amino acid sequence to predict structure for"
+        },
+        "predictor": {
+          "type": "string",
+          "enum": [
+            "esmfold",
+            "alphafold2"
+          ],
+          "default": "esmfold",
+          "description": "Structure predictor to use"
+        }
+      },
+      "required": [
+        "sequence"
+      ]
+    }
+  },
+  {
+    "name": "score_stability",
+    "description": "Score protein stability using ESM2 pseudo-log-likelihood. Optionally compute per-mutation effects (delta log-likelihood).",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "sequence": {
+          "type": "string",
+          "description": "Amino acid sequence to score"
+        },
+        "mutations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Optional mutations in 'X42Y' format for delta scoring"
+        },
+        "reference_sequence": {
+          "type": "string",
+          "description": "Optional wild-type sequence for mutation scoring"
+        }
+      },
+      "required": [
+        "sequence"
+      ]
+    }
+  },
+  {
+    "name": "energy_minimize",
+    "description": "Energy-minimize a protein structure using OpenMM with AMBER14 force field. Returns minimized PDB, energy change, and RMSD from initial structure.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "pdb_path": {
+          "type": "string",
+          "description": "Path to input PDB file"
+        },
+        "force_field": {
+          "type": "string",
+          "default": "amber14-all.xml",
+          "description": "OpenMM force field XML"
+        },
+        "num_steps": {
+          "type": "integer",
+          "default": 500,
+          "description": "Maximum minimization iterations"
+        },
+        "solvent": {
+          "type": "string",
+          "enum": [
+            "implicit",
+            "none"
+          ],
+          "default": "implicit",
+          "description": "Solvent model: implicit (GBn2) or none (vacuum)"
+        }
+      },
+      "required": [
+        "pdb_path"
+      ]
+    }
+  },
+  {
+    "name": "generate_backbone",
+    "description": "Generate de novo protein backbones using RFdiffusion unconditional generation. No target protein required.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "length": {
+          "type": "integer",
+          "description": "Backbone length in residues"
+        },
+        "num_designs": {
+          "type": "integer",
+          "default": 10,
+          "description": "Number of designs to generate"
+        }
+      },
+      "required": [
+        "length"
+      ]
+    }
+  },
+  {
+    "name": "rosetta_score",
+    "description": "Score a protein structure using Rosetta energy function (ref2015). Returns total score, per-residue energies, and energy breakdown.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "pdb_path": {
+          "type": "string",
+          "description": "Path to input PDB file"
+        },
+        "score_function": {
+          "type": "string",
+          "default": "ref2015",
+          "description": "Rosetta score function name"
+        }
+      },
+      "required": [
+        "pdb_path"
+      ]
+    }
+  },
+  {
+    "name": "rosetta_relax",
+    "description": "Relax a protein structure using Rosetta FastRelax. Returns relaxed PDB, energy change, and CA-RMSD.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "pdb_path": {
+          "type": "string",
+          "description": "Path to input PDB file"
+        },
+        "nstruct": {
+          "type": "integer",
+          "default": 1,
+          "description": "Number of relaxation trajectories"
+        },
+        "score_function": {
+          "type": "string",
+          "default": "ref2015",
+          "description": "Rosetta score function name"
+        }
+      },
+      "required": [
+        "pdb_path"
+      ]
+    }
+  },
+  {
+    "name": "rosetta_interface_score",
+    "description": "Compute interface energy metrics for a protein complex using Rosetta. Returns dG_separated, dSASA, interface hbonds, and packing stats.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "pdb_path": {
+          "type": "string",
+          "description": "Path to complex PDB file"
+        },
+        "chains": {
+          "type": "string",
+          "default": "A_B",
+          "description": "Chain grouping, e.g. 'A_B' or 'AB_C'"
+        },
+        "score_function": {
+          "type": "string",
+          "default": "ref2015",
+          "description": "Rosetta score function name"
+        }
+      },
+      "required": [
+        "pdb_path"
+      ]
+    }
+  },
+  {
+    "name": "rosetta_design",
+    "description": "Fixed-backbone sequence design using Rosetta PackRotamers + MinMover. Composite convenience tool (hidden in benchmark mode).",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "pdb_path": {
+          "type": "string",
+          "description": "Path to input PDB file"
+        },
+        "chains": {
+          "type": "string",
+          "default": "A_B",
+          "description": "Chain grouping for interface detection"
+        },
+        "fixed_positions": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          },
+          "description": "1-indexed positions to keep fixed"
+        },
+        "score_function": {
+          "type": "string",
+          "default": "ref2015",
+          "description": "Rosetta score function name"
+        }
+      },
+      "required": [
+        "pdb_path"
+      ]
+    }
+  },
+  {
+    "name": "predict_structure_boltz",
+    "description": "Predict protein structure using Boltz (fast alternative to AF2/ESMFold). Returns predicted PDB, pLDDT, and pTM scores.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "sequence": {
+          "type": "string",
+          "description": "Amino acid sequence to predict structure for"
+        },
+        "model": {
+          "type": "string",
+          "default": "boltz2",
+          "description": "Model name (default: boltz2)"
+        },
+        "num_samples": {
+          "type": "integer",
+          "default": 1,
+          "description": "Number of structure samples"
+        }
+      },
+      "required": [
+        "sequence"
+      ]
+    }
+  },
+  {
+    "name": "predict_affinity_boltz",
+    "description": "Predict binding affinity for a protein complex using Boltz. Returns affinity score, predicted structure, and confidence metrics.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "sequences": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of amino acid sequences, one per chain"
+        },
+        "model": {
+          "type": "string",
+          "default": "boltz2",
+          "description": "Model name (default: boltz2)"
+        }
+      },
+      "required": [
+        "sequences"
+      ]
+    }
+  }
+]
