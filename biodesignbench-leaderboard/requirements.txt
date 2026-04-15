@@ -4,3 +4,8 @@ plotly
 httpx>=0.25
 huggingface_hub>=0.20
 datasets>=2.16
+
+# LLM judge panel (Phase A)
+anthropic>=0.75
+openai>=1.40
+google-genai>=0.3

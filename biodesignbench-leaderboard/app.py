@@ -1523,14 +1523,21 @@ def create_app() -> gr.Blocks:
                                 label="Submission ID", scale=2,
                             )
                             boltz_btn = gr.Button(
-                                "Phase B: Run Boltz", scale=1,
+                                "Phase B: Run Boltz (GPU)", scale=1,
+                            )
+                        with gr.Row():
+                            judge_id = gr.Textbox(
+                                label="Submission ID", scale=2,
+                            )
+                            judge_btn = gr.Button(
+                                "Phase C: Run LLM Judge", scale=1,
                             )
                         with gr.Row():
                             final_id = gr.Textbox(
                                 label="Submission ID", scale=2,
                             )
                             final_btn = gr.Button(
-                                "Phase C: Finalize & Publish", scale=1,
+                                "Phase D: Finalize & Publish", scale=1,
                             )
                         pipeline_out = gr.HTML()
 
@@ -1681,12 +1688,60 @@ def create_app() -> gr.Blocks:
                                     "No task results to process.</div>"
                                 )
                             run_boltz_posteval(per_task)
+                            from eval_queue import save_task_result
+                            for tid, tres in per_task.items():
+                                save_task_result(sid.strip(), tid, tres)
                             return (
                                 '<div style="color:#38a169">'
                                 "Boltz post-assessment complete.</div>"
                             )
                         except Exception as e:
                             return f'<div style="color:#e53e3e">{e}</div>'
+
+                    def _run_judge(sid):
+                        try:
+                            import eval_judge as ej
+                            from eval_queue import (
+                                get_submission, save_task_result, update_status,
+                            )
+
+                            sub = get_submission(sid.strip())
+                            if sub is None:
+                                return ('<div style="color:#e53e3e">'
+                                        'Not found</div>')
+                            per_task = json.loads(
+                                sub.get("per_task_results", "{}")
+                            )
+                            if not per_task:
+                                return ('<div style="color:#e53e3e">'
+                                        "No task results to process.</div>")
+
+                            update_status(sid.strip(), "scoring")
+                            ej.run_judge_panel(
+                                per_task,
+                                agent_id=sub.get("agent_name", "unknown"),
+                                dry_run=False,
+                            )
+                            for tid, tres in per_task.items():
+                                save_task_result(sid.strip(), tid, tres)
+
+                            n_done = sum(
+                                1 for r in per_task.values()
+                                if r.get("hybrid_total") is not None
+                            )
+                            return (
+                                f'<div style="color:#38a169">'
+                                f"LLM judge complete on {n_done} tasks."
+                                "</div>"
+                            )
+                        except Exception as e:
+                            import traceback
+                            return (
+                                f'<div style="color:#e53e3e">'
+                                f'<strong>Judge error:</strong> {e}<br>'
+                                f'<pre style="font-size:0.7rem">'
+                                f'{traceback.format_exc()[:600]}</pre></div>'
+                            )
 
                     def _run_finalize(sid):
                         try:
@@ -1712,10 +1767,12 @@ def create_app() -> gr.Blocks:
                                 component_scores=agg["component_scores"],
                                 taxonomy_scores=agg["taxonomy_scores"],
                             )
+                            mode_label = agg.get("scoring_mode", "algo")
                             return (
                                 f'<div style="color:#38a169">'
                                 f'Finalized! Score: '
-                                f'{agg["overall_score"]:.1f}</div>'
+                                f'{agg["overall_score"]:.1f} '
+                                f'(scoring={mode_label})</div>'
                             )
                         except Exception as e:
                             return f'<div style="color:#e53e3e">{e}</div>'
@@ -1725,6 +1782,9 @@ def create_app() -> gr.Blocks:
                     )
                     boltz_btn.click(
                         _run_boltz, [boltz_id], pipeline_out,
+                    )
+                    judge_btn.click(
+                        _run_judge, [judge_id], pipeline_out,
                     )
                     final_btn.click(
                         _run_finalize, [final_id], pipeline_out,

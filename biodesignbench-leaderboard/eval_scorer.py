@@ -1583,12 +1583,11 @@ def aggregate_scores(
 ) -> dict[str, Any]:
     """Aggregate per-task scores into an overall submission result.
 
-    Args:
-        per_task_scores: Dict mapping task_id → score_submission_task() result.
-
-    Returns:
-        Dict with: overall_score, component_scores (averaged), taxonomy_scores,
-        tasks_completed, tasks_with_zero.
+    If `eval_judge.run_judge_panel()` has been run beforehand each task
+    will carry `hybrid_scores` and `hybrid_total`; in that case we use
+    the hybrid (algo + LLM judge, capped at rubric max) as the canonical
+    score. Otherwise we fall back to the algo-only `component_scores` /
+    `total_score` produced by the dispatcher + Boltz pipeline.
     """
     if not per_task_scores:
         return {
@@ -1603,16 +1602,24 @@ def aggregate_scores(
     totals = {c: 0.0 for c in DEFAULT_DESIGN_RUBRIC}
     n = len(per_task_scores)
     tasks_with_zero = 0
+    used_hybrid = False
 
     # Taxonomy breakdown
     taxonomy_scores: dict[str, dict[str, list[float]]] = {}
 
     for task_id, result in per_task_scores.items():
-        total_score = result["total_score"]
+        if "hybrid_scores" in result and "hybrid_total" in result:
+            comp_scores = result["hybrid_scores"]
+            total_score = result["hybrid_total"]
+            used_hybrid = True
+        else:
+            comp_scores = result.get("component_scores", {})
+            total_score = result.get("total_score", 0.0)
+
         if total_score == 0:
             tasks_with_zero += 1
 
-        for comp, val in result["component_scores"].items():
+        for comp, val in comp_scores.items():
             totals[comp] += val
 
         # Taxonomy mapping
@@ -1640,4 +1647,5 @@ def aggregate_scores(
         "tasks_completed": n,
         "tasks_total": n,
         "tasks_with_zero": tasks_with_zero,
+        "scoring_mode": "hybrid" if used_hybrid else "algo",
     }
