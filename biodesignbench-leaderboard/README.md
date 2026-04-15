@@ -39,6 +39,72 @@ Novelty, and Diversity. See the *About* tab for the full methodology and the
 - **Depth Gap** — Forced-depth and low-diversity intervention results
 - **About** — Methodology, submission guide, and citation info
 
+## Bringing your own MCP tools
+
+BioDesignBench is "bring your own LLM, optionally bring your own tools."
+The **Custom MCP** submission mode lets you evaluate any 17-tool
+implementation against the identical 76 tasks, the identical agent
+harness, and the identical scoring rubric used by the paper's reference
+runs. Our [`protein-design-mcp`](https://github.com/RomeroLab/protein-design-mcp)
+is just one reference implementation.
+
+### The contract
+
+Your MCP server is a public HTTPS endpoint that accepts POST requests:
+
+```
+POST https://your-mcp.example.com/
+Authorization: Bearer <optional shared token>
+Content-Type: application/json
+
+{
+  "name": "predict_structure",
+  "arguments": {"sequence": "MKKL..."}
+}
+```
+
+The response must be a JSON object. Report errors in a top-level
+`error` field rather than via HTTP status codes so the agent loop can
+see the reason.
+
+### Tool schemas
+
+The 17 reference tool names plus full JSON Schema for each argument
+set live in [`mcp_tool_schemas.json`](./mcp_tool_schemas.json). Your
+implementation must accept the same tool names and argument shapes —
+the leaderboard's agent loop picks tools by name from this list.
+
+### Reference implementation
+
+See [`RomeroLab/protein-design-mcp`](https://github.com/RomeroLab/protein-design-mcp)
+for the lab's reference implementation. It is published as a Docker
+image and a Modal app; you can fork it, replace individual tool
+handlers, and redeploy.
+
+### Hosting options
+
+Any public HTTPS endpoint works — we only check that the contract is
+satisfied:
+
+| Option | Pros | Cons |
+|---|---|---|
+| **Modal** (serverless GPU) | Cheap pay-per-use, auto-scale | Modal account needed |
+| **AWS / GCP / Azure VM** | Full control, reuse existing cloud | 24/7 billing or manual shutdown |
+| **Runpod / Lambda Labs / Vast** | Cheap GPU rentals | Manual spin-up per submission |
+| **Kubernetes / HPC** | Reuse on-prem GPU | Ops overhead |
+| **ngrok + local GPU** | $0, fastest iteration | URL is ephemeral |
+
+The lab's reference MCP is hosted on Modal for serverless
+pay-per-use cost control; your submission does not have to match.
+
+### Minimal stub
+
+A ~150-line FastAPI template you can fork is at
+[`example_mcp_server.py`](./example_mcp_server.py). Replace the
+`handle_*` stubs with your implementations, deploy, and paste the URL
+into the submission form's **Advanced: Custom MCP** section.
+
+
 ## Backend pipeline phases
 
 Submission processing runs in 4 admin-controlled phases:

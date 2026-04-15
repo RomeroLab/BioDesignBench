@@ -165,19 +165,40 @@ scripts/analysis/bdb_060_contamination.py           # SI Figure 9: contamination
 Submissions are accepted through the **HuggingFace Space**:
 👉 https://huggingface.co/spaces/RomeroLab-Duke/BioDesignBench-Leaderboard
 
-Two modes are supported:
+Unlike most agent benchmarks, **submitters do not host an HTTP endpoint**.
+The 76 task descriptions never leave Romero Lab infrastructure. You provide:
 
-1. **Reference MCP** *(recommended)* — your agent connects to our published
-   protein-design MCP server (Docker image / Modal endpoint, see
-   [`RomeroLab/protein-design-mcp`](https://github.com/RomeroLab/protein-design-mcp))
-   so that all submissions use the identical 17-tool reference implementation.
-2. **Custom MCP** — bring your own tool implementations. Tagged with a
-   `custom` badge on the leaderboard and excluded from "reference" rankings.
+- an **LLM provider + API key** — we run the BioDesignBench agent loop
+  against your chosen model (Anthropic / OpenAI / Google / DeepSeek)
+  inside the leaderboard backend. Your key is scrubbed from our records
+  immediately after the dispatch phase.
+- *(optional)* a **custom MCP URL** if you want to evaluate your own
+  tool implementations. Otherwise, the agent calls our reference
+  protein-design-mcp endpoint.
 
-Either way, you host an HTTPS endpoint that the leaderboard POSTs each task
-payload to and returns sequences + a tool-call trace. See
-[`biodesignbench-leaderboard/example_server.py`](biodesignbench-leaderboard/example_server.py)
-for a 200-line reference implementation.
+Each submission carries a unique canary token embedded as an HTML
+comment in every task prompt, so we can retrospectively detect leakage
+if any future model regurgitates it.
+
+### Bring your own tools (Custom MCP)
+
+If you want to benchmark a new tool implementation (a faster structure
+predictor, a different diffusion backbone, your own stability model)
+against the same 76 tasks / same scoring rubric used by the paper, stand
+up an HTTPS endpoint satisfying the MCP contract and paste the URL into
+the submission form's **Advanced: Custom MCP** section:
+
+- **Contract + hosting options**:
+  [`biodesignbench-leaderboard/README.md`](biodesignbench-leaderboard/README.md#bringing-your-own-mcp-tools)
+- **Minimal FastAPI stub (~150 lines)**:
+  [`biodesignbench-leaderboard/example_mcp_server.py`](biodesignbench-leaderboard/example_mcp_server.py)
+- **Reference implementation to fork**:
+  [`RomeroLab/protein-design-mcp`](https://github.com/RomeroLab/protein-design-mcp)
+  *(in progress)*
+
+The MCP server — ours or yours — only ever sees operational tool
+arguments (sequences, PDB paths, hotspot residues). It never sees the
+raw task prompt or evaluation criteria.
 
 **Rate limit:** 1 submission per calendar month per organization.
 LLM-judge API costs are paid by Romero Lab; please be considerate.

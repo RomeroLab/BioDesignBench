@@ -816,70 +816,67 @@ def build_about() -> str:
 
       <div {card}>
         <h2 {h2}>How to submit</h2>
-        <h3 {h3}>1. Build your agent</h3>
         <p {p}>
-          Create a protein design agent that runs the full plan &rarr;
-          sample &rarr; evaluate &rarr; iterate loop on each task. Pick one
-          of two MCP options:</p>
-        <ul style="color:#475569;padding-left:1.5rem;margin-bottom:0.8rem;
+          Unlike most agent benchmarks, <strong>you do not host an HTTP
+          endpoint</strong>. The 76 task descriptions never leave Romero
+          Lab infrastructure. Instead you provide:</p>
+        <ol style="color:#475569;padding-left:1.5rem;margin-bottom:0.8rem;
                    line-height:1.7">
-          <li><strong>Reference MCP</strong> &mdash; connect to our published
+          <li>an <strong>LLM provider + API key</strong>
+            (Anthropic / OpenAI / Google / DeepSeek).
+            We run the BioDesignBench agent loop against your chosen
+            model inside the leaderboard backend. Your key is
+            <em>scrubbed</em> from our records immediately after the
+            dispatch phase completes.</li>
+          <li>optionally, a <strong>custom MCP URL</strong> if you want
+            to evaluate your own tool implementations. Otherwise, the
+            agent calls our reference
             <a href="https://github.com/RomeroLab/protein-design-mcp"
                style="color:#2563eb;font-weight:600">protein-design-mcp</a>
-            server (Docker image / Modal endpoint, in progress). Eligible for
-            the reference ranking.</li>
-          <li><strong>Custom MCP</strong> &mdash; bring your own tool
-            implementations. Tagged with a <code>custom</code> badge on the
-            leaderboard, excluded from the reference ranking.</li>
+            endpoint (in progress).</li>
+        </ol>
+
+        <h3 {h3}>Data flow</h3>
+        <p {p}>
+          Each task prompt is sent to your chosen LLM provider via
+          their standard API (Anthropic, OpenAI, Google, DeepSeek) &mdash;
+          that single channel is the only path by which task data leaves
+          Romero Lab. The MCP server (reference or custom) only ever
+          sees operational tool arguments (sequences, PDB paths, hotspot
+          residues); it never sees the raw task prompt or evaluation
+          criteria. Every task prompt also carries a unique 16-character
+          canary token as an HTML comment, for retrospective leakage
+          detection.</p>
+
+        <h3 {h3}>Bring your own tools (Custom MCP)</h3>
+        <p {p}>
+          If you want to benchmark a new tool implementation (a faster
+          structure predictor, a different diffusion backbone, your own
+          stability model) against the same 76 tasks and rubric, stand
+          up an HTTPS endpoint that satisfies the MCP contract and paste
+          the URL into the submission form's
+          <em>Advanced: Custom MCP</em> section:</p>
+        <ul style="color:#475569;padding-left:1.5rem;margin-bottom:0.8rem;
+                   line-height:1.7">
+          <li><strong>Contract + hosting options</strong>:
+            <a href="https://github.com/RomeroLab/BioDesignBench/blob/main/biodesignbench-leaderboard/README.md#bringing-your-own-mcp-tools"
+               style="color:#2563eb;font-weight:600">leaderboard README</a></li>
+          <li><strong>Minimal FastAPI stub (~150 lines)</strong>:
+            <a href="https://github.com/RomeroLab/BioDesignBench/blob/main/biodesignbench-leaderboard/example_mcp_server.py"
+               style="color:#2563eb;font-weight:600"><code>example_mcp_server.py</code></a></li>
+          <li><strong>Reference implementation to fork</strong>:
+            <a href="https://github.com/RomeroLab/protein-design-mcp"
+               style="color:#2563eb;font-weight:600">RomeroLab/protein-design-mcp</a></li>
         </ul>
-        <h3 {h3}>2. Host an API endpoint</h3>
-        <p {p}>
-          Your agent must be accessible as a POST endpoint that accepts
-          task payloads and returns designed sequences plus a tool-call
-          trace. See <code>biodesignbench-leaderboard/example_server.py</code>
-          for a 200-line reference.</p>
-        <h3 {h3}>API specification</h3>
-        <pre style="background:#0f172a;color:#e2e8f0;padding:1.2rem;
-                    border-radius:10px;font-size:0.8rem;overflow-x:auto;
-                    line-height:1.6">POST /api/run
-
-Request:
-{{
-  "task_id": "dnb_ab_001",
-  "task_description": "Design a de novo binder for...",
-  "available_tools": [...],
-  "input_files": {{ "<pdb-name>": "<base64>" }},
-  "design_constraints": {{ ... }},
-  "max_steps": 50,
-  "timeout_sec": 300
-}}
-
-Response:
-{{
-  "sequences": ["MKKL..."],
-  "run_log": [{{ "step": 1, "tool": "...", "success": true }}],
-  "total_steps": 12,
-  "total_time_sec": 142.5,
-  "metrics": {{}}
-}}</pre>
-        <h3 {h3}>3. Submit and wait</h3>
-        <p {p}>
-          We dispatch 73 hidden tasks to your endpoint, run Boltz-2
-          structure verification on each design, and score against the
-          100-point hybrid rubric (algorithmic + 3-judge LLM panel).
-          Maximum <strong>1 submission per month</strong> per
-          organization &mdash; LLM-judge API costs are paid by Romero
-          Lab.</p>
-        <p {p}>
-          3 example tasks are publicly available for development and
-          testing your endpoint before submission.</p>
 
         <h3 {h3}>Limits</h3>
         <ul style="color:#475569;padding-left:1.5rem;margin-bottom:0.8rem;
                    line-height:1.7">
           <li>Maximum 1 submission per calendar month per organization</li>
-          <li>73 hidden tasks are used for ranking</li>
-          <li>3 public example tasks are available for development</li>
+          <li>73 hidden tasks are used for ranking; 3 public example
+            tasks are available for development</li>
+          <li>LLM-judge API costs are paid by Romero Lab; your own
+            agent LLM calls are billed to your provider</li>
         </ul>
       </div>
 
