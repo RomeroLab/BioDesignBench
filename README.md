@@ -24,17 +24,17 @@ hardcoded pipeline, but **invoke evaluation tools at only 14% of expert depth**,
 and workflow guidance rescues coverage without rescuing depth.
 
 ```
-                                                   Hybrid score (100 pts)
-  Human Oracle                ████████████████████  74.9
-  Human Expert                █████████████████      61.3
-  DeepSeek V3 (unguided)      █████████████████      60.4
-  DeepSeek V3 (guided)        ████████████████       58.5
-  GPT-5 (unguided)            ███████████████        55.6
-  GPT-5 (guided)              ███████████████        55.3
-  Hardcoded Pipeline          ███████████████        54.2
-  Claude Sonnet 4.5 (guided)  ██████████████         50.2
-  Claude Sonnet 4.5 (unguid)  ████████████           41.2
-  Gemini 2.5 Pro              ██                      8.4
+                                                     Hybrid score (100 pts)
+    Human Oracle                ████████████████████  74.9
+    Human Expert                █████████████████      61.3
+    DeepSeek V3 (unguided)      █████████████████      60.4
+    DeepSeek V3 (guided)        ████████████████       58.5
+    GPT-5 (unguided)            ███████████████        55.6
+    GPT-5 (guided)              ███████████████        55.3
+    Hardcoded Pipeline          ███████████████        54.2
+    Claude Sonnet 4.5 (guided)  ██████████████         50.2
+    Claude Sonnet 4.5 (unguid)  ████████████           41.2
+    Gemini 2.5 Pro              ██                      8.4
 ```
 
 ## Three principal findings
@@ -70,10 +70,13 @@ above. The repo contains:
   (`biodesignbench/eval/llm_judge/`)
 - **all paper figure-generating analysis scripts** (`scripts/analysis/`)
 - the **HuggingFace Space leaderboard backend** (`biodesignbench-leaderboard/`)
+- a **public demo task** for reviewer reproducibility (`examples/demo_task/`)
 
 Anything that would let you reconstruct a task — input files, prompts, ground
 truth, baseline outputs, results CSVs — is held privately by Romero Lab and
-served at evaluation time only.
+served at evaluation time only. Researchers requiring per-task data for
+replication studies may contact the corresponding author under a data use
+agreement.
 
 ## Repository layout
 
@@ -95,12 +98,29 @@ BioDesignBench/
 │   ├── interventions.py           # Forced-depth & low-diversity intervention specs
 │   └── tool_audit.py              # Tool-call trace analysis
 ├── biodesignbench-leaderboard/    # Gradio HuggingFace Space (backend + UI)
+├── examples/demo_task/            # Public demo task for reviewer reproducibility
 ├── scripts/analysis/              # All paper figure / SI analysis scripts (60 files)
 ├── docker/sandbox/                # Sandbox image for executing agent-generated code
 ├── docs/PRD.md                    # Project requirements document
 ├── pyproject.toml
 └── environment.yml
 ```
+
+## System requirements
+
+- **Operating systems tested:** Ubuntu 22.04 LTS, macOS 14 (Sonoma).
+- **Python:** 3.11 (pinned in `environment.yml` and `pyproject.toml`).
+- **Required non-standard hardware:** NVIDIA GPU (A10G or comparable) for
+  RFdiffusion, Boltz-2, ESMFold, and ProteinMPNN. The scoring pipeline,
+  analysis scripts, and figure-generation code run on CPU.
+- **Typical install time on a normal desktop:** 10 to 15 minutes for the conda
+  environment; approximately 30 minutes total when including pip extras and
+  the `protein-design-mcp` Docker image pull.
+- **Key dependency versions** (full pin list in `pyproject.toml` and
+  `environment.yml`): NumPy ≥ 1.24, pandas ≥ 2.0, SciPy ≥ 1.10,
+  scikit-learn ≥ 1.3, biopython ≥ 1.81, PyTorch ≥ 2.0, matplotlib ≥ 3.7,
+  seaborn ≥ 0.12, anthropic SDK ≥ 0.75, openai ≥ 1.12,
+  google-generativeai ≥ 0.8.
 
 ## Quickstart (developers)
 
@@ -162,9 +182,38 @@ scripts/analysis/bdb_050_variance_decomposition.py  # Figure 5: variance partiti
 scripts/analysis/bdb_060_contamination.py           # SI Figure 9: contamination
 ```
 
+## Demo
+
+A worked example using a public trypsin-binder design task is shipped in
+`examples/demo_task/` so reviewers and new users can run the scoring
+pipeline end to end without access to the private benchmark tasks. To
+run it:
+
+```bash
+biodesignbench score \
+  --task examples/demo_task/trypsin_binder.json \
+  --output examples/demo_output/
+```
+
+**Expected output:** a JSON file in `examples/demo_output/` containing
+the six rubric component scores (Approach, Orchestration, Quality,
+Feasibility, Novelty, Diversity) summing to a total out of 100, a
+per-task scoring log, and the predicted complex structure as a PDB
+file.
+
+**Expected run time on a normal desktop:** approximately 2 minutes for
+the scoring pipeline alone (using pre-computed structures shipped with
+the demo); approximately 10 minutes when also running Boltz-2 structure
+verification on a single A10G GPU.
+
+The demo task is fully public and does not overlap with any of the 76
+private benchmark tasks, so running it does not compromise the
+contamination defense described above.
+
 ## Submitting an agent for evaluation
 
 Submissions are accepted through the **HuggingFace Space**:
+
 👉 https://huggingface.co/spaces/RomeroLab-Duke/BioDesignBench-Leaderboard
 
 Unlike most agent benchmarks, **submitters do not host an HTTP endpoint**.
